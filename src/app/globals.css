@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* テーマ変数(00_画面共通ルール 2.1)。画面のコードには色を直接書かず、ここの名前(bg-primary など)だけを使う。
+   明るい配色だけにする(ダークモードは作らない)。 */
+@theme {
+  /* 文字・背景・枠線 */
+  --color-ink: #1F2328;          /* 本文の文字 */
+  --color-ink-muted: #5A6270;    /* 補足・説明の文字 */
+  --color-canvas: #F6F5F2;       /* 画面の背景（生成り） */
+  --color-surface: #FFFFFF;      /* カード・表・入力欄の背景 */
+  --color-line: #D9D6CF;         /* 区切り線・カードの枠（飾り） */
+  --color-line-strong: #8A857C;  /* 入力欄・副ボタンの枠 */
+
+  /* 基本色（藍）と強調色（朱） */
+  --color-primary: #1E3A6E;       /* 主ボタン・リンク・選択中 */
+  --color-primary-hover: #162B52; /* 主ボタンを押したとき・マウスを乗せたとき */
+  --color-primary-soft: #E8EEF7;  /* 選択中のメニュー・ホームのタイルの背景 */
+  --color-accent: #C8442A;        /* 朱。飾りだけに使う（選択中のメニューの縦線・上の帯の線・ロゴ） */
+
+  /* 意味を持つ色 */
+  --color-success: #1F7A4D;      --color-success-soft: #E7F4EC;
+  --color-warning: #8A5A00;      --color-warning-soft: #FFF4DB;
+  --color-warning-line: #E0A100; /* 注意の枠線（飾り）。文字には使わない */
+  --color-danger: #B42318;       --color-danger-soft: #FDECEA;
+  --color-danger-hover: #962015;
+  --color-ai: #5B3FA0;           --color-ai-soft: #F1ECFA; /* AIの案 */
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-noto-sans-jp), "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
 }
