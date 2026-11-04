@@ -47,6 +47,8 @@ import { ExtractedForm, MemoForm, StatusAssigneeForm } from "./InquiryForms";
 import { CustomDraftNotes, CustomQuotePanel, isCustomReplyKind } from "./CustomQuotePanel";
 import { FaqDraftNotes, FaqPanelSection, faqErrorMessage, faqFallbackMessage, loadFaqQuestions } from "./FaqSection";
 import { ReplyDraftCard } from "./ReplyDraftCard";
+import { ReturnDraftNotes, ReturnPanelSection, returnFallbackMessage } from "./ReturnSection";
+import { StockDraftNotes, StockPanelSection, stockErrorMessage, stockFallbackMessage } from "./StockSection";
 
 // AIで見分け直す(最大30秒)ため、操作の最大時間を60秒にする
 export const maxDuration = 60;
@@ -66,6 +68,12 @@ const DONE_MESSAGES: Record<string, string> = {
   // D-03 よくある質問への回答
   faq_ai: "よくある質問から返信文の案を作りました。内容を確かめてください。",
   faq_template: "ひな形で返信文の案を作りました。内容を確かめてください。",
+  // D-02 在庫照会への回答
+  stock_ai: "在庫照会の返信文の案を作りました。在庫・日付を確かめてください。",
+  stock_template: "ひな形で在庫照会の案を作りました。在庫・日付を確かめてください。",
+  // D-06 返品依頼への回答
+  return_ai: "返品の返信文の案を作りました。手順・期限・送料の文を確かめてください。",
+  return_template: "ひな形で返品の案を作りました。内容を確かめてください。",
 };
 const ERROR_MESSAGES: Record<string, string> = {
   category: "種類を選び直してください。",
@@ -93,11 +101,8 @@ const AI_MESSAGES: Record<string, { tone: "success" | "warning"; text: string }>
   failed: { tone: "warning", text: "AIで見分けられませんでした。手で選んでください。" },
 };
 
-// 種類ごとのパネル(D-02・D-06 が作る。今は置き場所だけ。D-03 は FaqSection.tsx、D-04 は CustomQuotePanel.tsx)
-const PANEL_FEATURES: Partial<Record<InquiryCategory, string>> = {
-  stock: "D-02 在庫照会",
-  return: "D-06 返品",
-};
+// 種類ごとのパネル: D-02 は StockSection.tsx、D-03 は FaqSection.tsx、D-04 は CustomQuotePanel.tsx、D-06 は ReturnSection.tsx
+const PANEL_CATEGORIES: InquiryCategory[] = ["stock", "faq", "custom", "return"];
 
 const str = (v: string | string[] | undefined): string => (typeof v === "string" ? v : "");
 
@@ -194,6 +199,9 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
   const pastDateWarning = str(query.warn) === "past_date";
   const faqError = faqErrorMessage(str(query.faq_error));
   const faqFallback = faqFallbackMessage(str(query.faq_ai));
+  const stockError = stockErrorMessage(str(query.stock_error));
+  const stockFallback = stockFallbackMessage(str(query.stock_ai));
+  const returnFallback = returnFallbackMessage(str(query.return_ai));
 
   const closedOrIgnored = inquiry.status === "closed" || inquiry.status === "ignored";
   const drafts = replies.filter((r) => r.status === "draft");
@@ -201,7 +209,6 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
   const discarded = replies.filter((r) => r.status === "discarded");
   const title = `${inquiry.subject ?? "（件名なし）"}${inquiry.customerName ? `（${inquiry.customerName} 様）` : ""}`;
   const staffOptions = staff.map((e) => ({ value: e.id, label: `${e.lastName} ${e.firstName}` }));
-  const panel = inquiry.category ? PANEL_FEATURES[inquiry.category] : undefined;
   // D-03 G01: 種類がよくある質問のとき。ほかの種類でも「別の種類の案も作る」から開ける(?panel=faq)
   const showFaqPanel = inquiry.category === "faq" || str(query.panel) === "faq";
 
@@ -218,6 +225,8 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
       {error && <Alert tone="error">{error}</Alert>}
       {ai && <Alert tone={ai.tone}>{ai.text}</Alert>}
       {faqFallback && <Alert tone="warning">{faqFallback}</Alert>}
+      {stockFallback && <Alert tone="warning">{stockFallback}</Alert>}
+      {returnFallback && <Alert tone="warning">{returnFallback}</Alert>}
       {pastDateWarning && <Alert tone="warning">希望日が過去の日付です。お客様の文を確かめてください（保存はしました）。</Alert>}
       <AiUsageNotice usage={usage} />
 
@@ -357,15 +366,13 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
               </details>
             </div>
 
-            {/* 種類ごとのパネル(D-02・D-03・D-04・D-06 の画面がここに入る。D-03・D-04 は作成済み) */}
-            {inquiry.category !== "faq" && inquiry.category !== "custom" && (
+            {/* 種類ごとのパネル(D-02・D-03・D-04・D-06)。その他・未分類のときだけ、ここに案内を出す */}
+            {!(inquiry.category && PANEL_CATEGORIES.includes(inquiry.category)) && (
               <div className="flex flex-col gap-2 rounded-md border border-dashed border-line-strong p-3 text-sm text-ink-muted">
                 <p>
                   {!inquiry.category
                     ? "種類を選んでください。"
-                    : panel
-                      ? `${categoryLabel(inquiry.category)}の返信の案（${panel}）は、この場所に出します（準備中）。いまは下の「手で返信文を書く」から作ってください。`
-                      : "その他の問い合わせは、下の「手で返信文を書く」から返信文を作ってください。"}
+                    : `${categoryLabel(inquiry.category)}の問い合わせは、下の「手で返信文を書く」から返信文を作ってください。`}
                 </p>
                 {inquiry.category && !showFaqPanel && (
                   <p>
@@ -376,6 +383,52 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                   </p>
                 )}
               </div>
+            )}
+
+            {/* D-02 G01 在庫照会のパネル(種類が在庫のとき) */}
+            {inquiry.category === "stock" && (
+              <>
+                <div id="stock-panel" className="flex flex-col gap-3 rounded-md border border-line p-3">
+                  <h3 className="font-bold">在庫照会</h3>
+                  {stockError && <Alert tone="error">{stockError}</Alert>}
+                  {closedOrIgnored ? (
+                    <p className="text-sm text-ink-muted">完了・対応不要の問い合わせです。返信するときは、状態を「対応中」に戻してください。</p>
+                  ) : (
+                    <StockPanelSection inquiry={inquiry} aiStopped={usage.state === "stopped"} />
+                  )}
+                </div>
+                {!showFaqPanel && (
+                  <p className="text-sm text-ink-muted">
+                    別の種類の案も作る:{" "}
+                    <Link href={`/admin/inquiries/${inquiry.id}?panel=faq#faq-panel`} className="font-bold text-primary hover:underline">
+                      よくある質問の回答
+                    </Link>
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* D-06 G01 返品のパネル(種類が返品のとき) */}
+            {inquiry.category === "return" && (
+              <>
+                <div id="return-panel" className="flex flex-col gap-3 rounded-md border border-line p-3">
+                  <h3 className="font-bold">返品・交換</h3>
+                  <ReturnPanelSection
+                    inquiry={inquiry}
+                    closed={closedOrIgnored}
+                    aiStopped={usage.state === "stopped"}
+                    registered={str(query.done) === "return_registered"}
+                  />
+                </div>
+                {!showFaqPanel && (
+                  <p className="text-sm text-ink-muted">
+                    別の種類の案も作る:{" "}
+                    <Link href={`/admin/inquiries/${inquiry.id}?panel=faq#faq-panel`} className="font-bold text-primary hover:underline">
+                      よくある質問の回答
+                    </Link>
+                  </p>
+                )}
+              </>
             )}
 
             {/* D-04 G01 特注のパネル(種類が特注のとき) */}
@@ -430,6 +483,10 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                     <AiDraft title={heading} createdAt={r.createdAt}>
                       {r.kind === "faq" ? (
                         <FaqDraftNotes reply={r} questions={faqQuestions} />
+                      ) : r.kind === "stock" ? (
+                        <StockDraftNotes reply={r} />
+                      ) : r.kind === "return" ? (
+                        <ReturnDraftNotes reply={r} />
                       ) : isCustomReplyKind(r.kind) ? (
                         <CustomDraftNotes reply={r} />
                       ) : (
@@ -444,6 +501,10 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                       </p>
                       {r.kind === "faq" ? (
                         <FaqDraftNotes reply={r} questions={faqQuestions} />
+                      ) : r.kind === "stock" ? (
+                        <StockDraftNotes reply={r} />
+                      ) : r.kind === "return" ? (
+                        <ReturnDraftNotes reply={r} />
                       ) : isCustomReplyKind(r.kind) ? (
                         <CustomDraftNotes reply={r} />
                       ) : (
