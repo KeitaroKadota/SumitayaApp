@@ -39,6 +39,12 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // B-01 CROSS MALL からの受注・在庫の取り込み(02 の G01・G05)。「例外注文(B-02)」は B-02 の画面を作るときに足す
   { group: "受注・在庫", href: "/admin/orders", label: "受注", feature: "orders" },
   { group: "受注・在庫", href: "/admin/inventory", label: "在庫", feature: ["orders", "inventory"] },
+  // E-02 勤怠チェック・シフトとの突合(02 の画面一覧)
+  { group: "勤怠・給与", href: "/admin/attendance", label: "勤怠の一覧", feature: "attendance_admin" },
+  { group: "勤怠・給与", href: "/admin/attendance/shifts", label: "シフト", feature: "attendance_admin" },
+  { group: "勤怠・給与", href: "/admin/attendance/alerts", label: "勤怠の異常", feature: "attendance_admin" },
+  // E-03 給与CSVの出力(02 の G01)
+  { group: "勤怠・給与", href: "/admin/payroll", label: "給与CSV", feature: "payroll" },
   // CMN-02 マスタ管理(02 の画面一覧)
   { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" },
   { group: "マスタ", href: "/admin/products", label: "商品", feature: "products" },

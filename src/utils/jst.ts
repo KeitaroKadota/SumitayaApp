@@ -35,3 +35,6 @@ export const weekdayOfDateStr = (dateStr: string): number => {
 
 // 利用日(YYYY-MM-DD)とHH:mmから、JSTでのその時刻を表すDateを作る
 export const combineDateTimeJST = (dateStr: string, hhmm: string): Date => new Date(`${dateStr}T${hhmm}:00+09:00`);
+
+// 日時(Date)のJSTの日付をYYYY-MM-DD形式で返す(サーバーのタイムゾーンに左右されない)
+export const toDateJST = (d: Date): string => d.toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });

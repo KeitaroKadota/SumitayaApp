@@ -2,6 +2,7 @@
 // 入口は /api/cron/daily の1つだけ。毎朝7:00(日本時間)に、下の処理の表を上から順に1つずつ動かす。
 // みるきーの src/app/api/cron/* の外枠(CRON_SECRET の確認・結果の記録・二重実行の防止)を参考にし、
 // 二重実行の防止はシートの代わりに cron_runs の重複不可の制約で行う。
+import { ATTENDANCE_CHECK_JOB, runAttendanceCheck } from "@/utils/attendanceCron";
 import { query } from "@/utils/db";
 import { todayJST } from "@/utils/jst";
 import { runTaskDigest, taskDigestRunsOn } from "@/utils/taskDigest";
@@ -29,8 +30,10 @@ export type JobResult = {
 const ERROR_MAX = 500;
 
 // 各機能の定期処理(まとめ通知より前に動かすもの)。足すときは 00_共通設計 7.1 と CMN-03 01 7.3 の表にも足す。
-// 例: { name: "attendance_check", feature: "E-02", run: runAttendanceCheck }(E-02 を作るときに足す)
-const JOBS_BEFORE_DIGEST: DailyJob[] = [];
+const JOBS_BEFORE_DIGEST: DailyJob[] = [
+  // 1番目: E-02 勤怠のチェック(前の日まで。その日の異常のタスクをまとめ通知に載せるため先に動かす。E-02 03 EV-12)
+  { name: ATTENDANCE_CHECK_JOB, feature: "E-02", run: runAttendanceCheck },
+];
 
 // 最後は必ず毎朝のまとめ通知(その日のチェックで出たタスクもまとめに入れるため)
 const TASK_DIGEST_JOB: DailyJob = {

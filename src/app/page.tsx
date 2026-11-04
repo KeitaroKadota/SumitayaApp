@@ -9,6 +9,7 @@ import { HomeTile, HomeTiles, TaskIcon } from "@/components/HomeTiles";
 import { LinkButton } from "@/components/LinkButton";
 import { LogoutButton } from "@/components/LogoutButton";
 import { StaffHeader } from "@/components/StaffHeader";
+import { TimecardCard } from "./timecard/TimecardCard";
 
 // G04 ホーム(スマホ。EV-10)
 export default async function HomePage({ searchParams }: PageProps<"/">) {
@@ -29,7 +30,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
         {password_changed === "1" && <Alert tone="success">パスワードを変更しました。</Alert>}
 
-        {/* 打刻の枠(E-01 で作る。ホームの打刻カードをここに置く) */}
+        {/* 打刻の枠(E-01 の G01。勤怠の対象でない人には何も出さない) */}
+        {canAccess(me.roles, "timecard") && <TimecardCard employeeId={me.id} />}
 
         {line && !line.linked && (
           <Alert tone="info">

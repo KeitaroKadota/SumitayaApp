@@ -15,7 +15,7 @@ export type TaskTypeInfo = {
 // 担当は各機能が createTask で渡す(この表では持たない。各機能の設計書の値は CMN-03 01 7.2 を参照)。
 // 【仮】「手で完了にできるか」が各機能の設計書で決まっていない種類は、仮の値にしている(00_仮決め一覧 CMN03-仮-14)
 export const TASK_TYPES = {
-  // E-02 勤怠の確認。打刻を直すと自動で完了にする想定(【仮】E-02 で決める)
+  // E-02 勤怠の確認。管理者あて(attendance_alert)と本人あて(_self)。異常が直る・確認済みになると E-02 が自動で完了にする(E-02 01 7章)
   attendance_alert: { label: "勤怠の確認", feature: "E-02", manualComplete: false },
   attendance_alert_self: { label: "勤怠の確認", feature: "E-02", manualComplete: false },
   // E-04 受け取った請求書の確認(【仮】E-04 で決める)
