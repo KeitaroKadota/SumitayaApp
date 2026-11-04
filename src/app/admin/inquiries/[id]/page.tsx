@@ -44,6 +44,8 @@ import {
 import { getInquiry, listReplies, listThreadMessages, type InquiryMessage } from "../inquiryData";
 import { STATUS_TONES } from "../statusTone";
 import { ExtractedForm, MemoForm, StatusAssigneeForm } from "./InquiryForms";
+import { CustomDraftNotes, CustomQuotePanel, isCustomReplyKind } from "./CustomQuotePanel";
+import { FaqDraftNotes, FaqPanelSection, faqErrorMessage, faqFallbackMessage, loadFaqQuestions } from "./FaqSection";
 import { ReplyDraftCard } from "./ReplyDraftCard";
 
 // AIで見分け直す(最大30秒)ため、操作の最大時間を60秒にする
@@ -61,6 +63,9 @@ const DONE_MESSAGES: Record<string, string> = {
   status_closed: "完了にしました。",
   status_ignored: "対応不要にしました。",
   status_in_progress: "対応中にしました。",
+  // D-03 よくある質問への回答
+  faq_ai: "よくある質問から返信文の案を作りました。内容を確かめてください。",
+  faq_template: "ひな形で返信文の案を作りました。内容を確かめてください。",
 };
 const ERROR_MESSAGES: Record<string, string> = {
   category: "種類を選び直してください。",
@@ -88,11 +93,9 @@ const AI_MESSAGES: Record<string, { tone: "success" | "warning"; text: string }>
   failed: { tone: "warning", text: "AIで見分けられませんでした。手で選んでください。" },
 };
 
-// 種類ごとのパネル(D-02・D-03・D-04・D-06 が作る。今は置き場所だけ)
+// 種類ごとのパネル(D-02・D-06 が作る。今は置き場所だけ。D-03 は FaqSection.tsx、D-04 は CustomQuotePanel.tsx)
 const PANEL_FEATURES: Partial<Record<InquiryCategory, string>> = {
   stock: "D-02 在庫照会",
-  faq: "D-03 よくある質問",
-  custom: "D-04 特注",
   return: "D-06 返品",
 };
 
@@ -183,11 +186,14 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
   const replies = await listReplies(inquiry.id);
   const staff = await listActiveEmployees({ featureKey: "inquiries" });
   const usage = await getAiUsage();
+  const faqQuestions = await loadFaqQuestions(replies);
 
   const done = DONE_MESSAGES[str(query.done)];
   const error = ERROR_MESSAGES[str(query.error)];
   const ai = AI_MESSAGES[str(query.ai)];
   const pastDateWarning = str(query.warn) === "past_date";
+  const faqError = faqErrorMessage(str(query.faq_error));
+  const faqFallback = faqFallbackMessage(str(query.faq_ai));
 
   const closedOrIgnored = inquiry.status === "closed" || inquiry.status === "ignored";
   const drafts = replies.filter((r) => r.status === "draft");
@@ -196,6 +202,8 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
   const title = `${inquiry.subject ?? "（件名なし）"}${inquiry.customerName ? `（${inquiry.customerName} 様）` : ""}`;
   const staffOptions = staff.map((e) => ({ value: e.id, label: `${e.lastName} ${e.firstName}` }));
   const panel = inquiry.category ? PANEL_FEATURES[inquiry.category] : undefined;
+  // D-03 G01: 種類がよくある質問のとき。ほかの種類でも「別の種類の案も作る」から開ける(?panel=faq)
+  const showFaqPanel = inquiry.category === "faq" || str(query.panel) === "faq";
 
   return (
     <div className="flex flex-col gap-4">
@@ -209,6 +217,7 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
       {done && <Alert tone="success">{done}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
       {ai && <Alert tone={ai.tone}>{ai.text}</Alert>}
+      {faqFallback && <Alert tone="warning">{faqFallback}</Alert>}
       {pastDateWarning && <Alert tone="warning">希望日が過去の日付です。お客様の文を確かめてください（保存はしました）。</Alert>}
       <AiUsageNotice usage={usage} />
 
@@ -348,14 +357,54 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
               </details>
             </div>
 
-            {/* 種類ごとのパネル(D-02・D-03・D-04・D-06 の画面がここに入る) */}
-            <div className="rounded-md border border-dashed border-line-strong p-3 text-sm text-ink-muted">
-              {!inquiry.category
-                ? "種類を選んでください。"
-                : panel
-                  ? `${categoryLabel(inquiry.category)}の返信の案（${panel}）は、この場所に出します（準備中）。いまは下の「手で返信文を書く」から作ってください。`
-                  : "その他の問い合わせは、下の「手で返信文を書く」から返信文を作ってください。"}
-            </div>
+            {/* 種類ごとのパネル(D-02・D-03・D-04・D-06 の画面がここに入る。D-03・D-04 は作成済み) */}
+            {inquiry.category !== "faq" && inquiry.category !== "custom" && (
+              <div className="flex flex-col gap-2 rounded-md border border-dashed border-line-strong p-3 text-sm text-ink-muted">
+                <p>
+                  {!inquiry.category
+                    ? "種類を選んでください。"
+                    : panel
+                      ? `${categoryLabel(inquiry.category)}の返信の案（${panel}）は、この場所に出します（準備中）。いまは下の「手で返信文を書く」から作ってください。`
+                      : "その他の問い合わせは、下の「手で返信文を書く」から返信文を作ってください。"}
+                </p>
+                {inquiry.category && !showFaqPanel && (
+                  <p>
+                    別の種類の案も作る:{" "}
+                    <Link href={`/admin/inquiries/${inquiry.id}?panel=faq#faq-panel`} className="font-bold text-primary hover:underline">
+                      よくある質問の回答
+                    </Link>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* D-04 G01 特注のパネル(種類が特注のとき) */}
+            {inquiry.category === "custom" && (
+              <>
+                <CustomQuotePanel inquiry={inquiry} closed={closedOrIgnored} />
+                {!showFaqPanel && (
+                  <p className="text-sm text-ink-muted">
+                    別の種類の案も作る:{" "}
+                    <Link href={`/admin/inquiries/${inquiry.id}?panel=faq#faq-panel`} className="font-bold text-primary hover:underline">
+                      よくある質問の回答
+                    </Link>
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* D-03 G01 よくある質問への回答 */}
+            {showFaqPanel && (
+              <div id="faq-panel" className="flex flex-col gap-3 rounded-md border border-line p-3">
+                <h3 className="font-bold">よくある質問への回答</h3>
+                {faqError && <Alert tone="error">{faqError}</Alert>}
+                {closedOrIgnored ? (
+                  <p className="text-sm text-ink-muted">完了・対応不要の問い合わせです。返信するときは、状態を「対応中」に戻してください。</p>
+                ) : (
+                  <FaqPanelSection inquiry={inquiry} aiStopped={usage.state === "stopped"} />
+                )}
+              </div>
+            )}
           </section>
 
           {/* 返信欄(EV-10〜EV-14) */}
@@ -369,6 +418,8 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                   replyId={r.id}
                   initialBody={r.body}
                   defaultSentVia={defaultSentVia(inquiry.channel)}
+                  // D-04 EV-06 手順5: 聞き返しを送った後は「お客様の返事待ち」を初めの値にする
+                  defaultAfterStatus={r.kind === "custom_ask" ? "waiting" : "replied"}
                   discardAction={discardReplyAction.bind(null, r.id)}
                 />
               );
@@ -377,7 +428,13 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                 <div key={r.id} id={`reply-${r.id}`} className="flex flex-col gap-2 rounded-md border border-line p-3">
                   {r.draftSource === "ai" ? (
                     <AiDraft title={heading} createdAt={r.createdAt}>
-                      {r.facts && <p className="mb-2 text-sm">根拠: {factsText(r.facts)}</p>}
+                      {r.kind === "faq" ? (
+                        <FaqDraftNotes reply={r} questions={faqQuestions} />
+                      ) : isCustomReplyKind(r.kind) ? (
+                        <CustomDraftNotes reply={r} />
+                      ) : (
+                        r.facts && <p className="mb-2 text-sm">根拠: {factsText(r.facts)}</p>
+                      )}
                       {card}
                     </AiDraft>
                   ) : (
@@ -385,7 +442,13 @@ export default async function InquiryDetailPage({ params, searchParams }: PagePr
                       <p className="text-sm font-bold">
                         {heading}（{REPLY_DRAFT_SOURCES[r.draftSource]}）{formatDateTime(r.createdAt)} 作成
                       </p>
-                      {r.facts && <p className="text-sm">根拠: {factsText(r.facts)}</p>}
+                      {r.kind === "faq" ? (
+                        <FaqDraftNotes reply={r} questions={faqQuestions} />
+                      ) : isCustomReplyKind(r.kind) ? (
+                        <CustomDraftNotes reply={r} />
+                      ) : (
+                        r.facts && <p className="text-sm">根拠: {factsText(r.facts)}</p>
+                      )}
                       {card}
                     </>
                   )}

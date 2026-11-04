@@ -26,6 +26,11 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { group: "タスク", href: "/admin/tasks", label: "全員のタスク", feature: "tasks_admin" },
   // D-01 問い合わせの取り込み・分類(02 の G01)
   { group: "問い合わせ", href: "/admin/inquiries", label: "問い合わせ", feature: "inquiries" },
+  // D-03 よくある質問への回答(02 の G02)
+  { group: "問い合わせ", href: "/admin/inquiries/faq", label: "よくある質問", feature: "inquiry_settings" },
+  // D-04 特注の仕様確認・概算見積(02 の G02・G04)
+  { group: "問い合わせ", href: "/admin/inquiries/custom", label: "特注", feature: "inquiries" },
+  { group: "問い合わせ", href: "/admin/inquiries/price-items", label: "単価表", feature: "inquiry_settings" },
   // CMN-02 マスタ管理(02 の画面一覧)
   { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" },
   { group: "マスタ", href: "/admin/products", label: "商品", feature: "products" },

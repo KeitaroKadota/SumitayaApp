@@ -24,11 +24,14 @@ export function ReplyDraftCard({
   replyId,
   initialBody,
   defaultSentVia,
+  defaultAfterStatus = "replied",
   discardAction,
 }: {
   replyId: string;
   initialBody: string;
   defaultSentVia: SentVia;
+  // 送った後の状態の初めの値(D-04 の聞き返しは「お客様の返事待ち」)
+  defaultAfterStatus?: "replied" | "waiting" | "closed";
   discardAction: () => Promise<void>;
 }) {
   const [body, setBody] = useState(initialBody);
@@ -120,7 +123,7 @@ export function ReplyDraftCard({
               ))}
             </Select>
           </Field>
-          <RadioGroup name="after_status" label="送った後の状態" options={AFTER_OPTIONS} defaultValue="replied" required />
+          <RadioGroup name="after_status" label="送った後の状態" options={AFTER_OPTIONS} defaultValue={defaultAfterStatus} required />
           <div className="flex justify-end">
             <SubmitButton pendingText="記録中…">送信済みとして記録する</SubmitButton>
           </div>

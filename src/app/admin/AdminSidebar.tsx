@@ -15,13 +15,19 @@ function MenuLinks({ menu }: { menu: MenuGroup[] }) {
     return <p className="px-3 py-2 text-xs text-ink-muted">使える画面はまだありません。</p>;
   }
 
+  // 選択中は、今のURLに合う項目のうち一番長いもの(「問い合わせ」と「よくある質問」の両方に印が付かないように)
+  const activeHref = menu
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <>
       {menu.map(({ group, items }) => (
         <div key={group} className="flex flex-col gap-1">
           <p className="px-3 pt-2 text-xs font-bold text-ink-muted">{group}</p>
           {items.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active = item.href === activeHref;
             return (
               <Link
                 key={item.href}

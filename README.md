@@ -55,9 +55,11 @@ http://localhost:3000 で確認できる。
 ## データベース
 
 - テーブルは `db/migrations/` の SQL で作る。番号の順に、Supabase の SQL Editor で1回ずつ実行する。
-  - `0001_E-01_work_locations.sql`（打刻の場所・共通のトリガー）→ `0002_CMN-02_employees.sql`（従業員）→ … → `0013_D-01_ai_requests.sql`
+  - `0001_E-01_work_locations.sql`（打刻の場所・共通のトリガー）→ `0002_CMN-02_employees.sql`（従業員）→ … → `0017_D-04_custom_quotes.sql`
   - タスク・通知（CMN-03）は `0008_CMN-03_tasks.sql` → `0009_CMN-03_notification_logs.sql` → `0010_CMN-03_cron_runs.sql`
   - 問い合わせ・AI（D-01）は `0011_D-01_inquiries.sql` → `0012_D-01_inquiry_replies.sql` → `0013_D-01_ai_requests.sql`（0010 の後）
+  - 返信のひな形（D-02 の担当。D-03 が先に使う）とよくある質問（D-03）は `0014_D-02_reply_templates.sql` → `0015_D-03_faq_entries.sql`（0013 の後）
+  - 特注の単価表・案件（D-04）は `0016_D-04_custom_price_items.sql` → `0017_D-04_custom_quotes.sql`（0015 の後）。単価の値は入れていない（画面で登録する）
 - すべてのテーブルで RLS を有効にしている。アプリはサーバーからだけ接続する。
 
 ## 定期実行（cron）
