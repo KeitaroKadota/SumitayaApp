@@ -85,3 +85,13 @@ export const formatPercent = (ratio: number): string => {
   const value = (ratio * 100).toFixed(1);
   return value.startsWith("-") ? `${MINUS}${value.slice(1)}％` : `${value}％`;
 };
+
+// 2026年11月20日(請求書の紙に書く日付。E-05 G03。みるきーの formatJaDate を流用)
+export const formatJaDate = (date: string): string =>
+  /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${Number(date.slice(0, 4))}年${Number(date.slice(5, 7))}月${Number(date.slice(8, 10))}日` : date;
+
+// URL の ?ids=a,b や ?ids=a&ids=b を、空・重複を除いた並びにする(印刷のページ。みるきーの parseIdList を流用)
+export const parseIdList = (value: string | string[] | null | undefined): string[] => {
+  const raw = Array.isArray(value) ? value.join(",") : (value ?? "");
+  return [...new Set(raw.split(",").map((s) => s.trim()).filter(Boolean))];
+};

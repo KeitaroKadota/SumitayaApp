@@ -6,7 +6,7 @@ import { canAccess, type FeatureKey, type Role } from "@/utils/permissions";
 
 // feature を並びで書いたときは、どれか1つでも使えれば出す(B-01 の在庫の一覧は orders か inventory)
 // badge: 件数のバッジを出す項目(数は layout が求めて渡す。00_画面共通ルール 5.2)
-export type AdminMenuBadge = "payables_review";
+export type AdminMenuBadge = "payables_review" | "deposits_unmatched";
 export type AdminMenuItem = {
   group: AdminMenuGroup;
   href: string;
@@ -50,6 +50,10 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // E-04 受け取った請求書の読み取り・支払予定(02 の画面一覧。「受け取った請求書」には確認待ちの件数を出す)
   { group: "請求・支払", href: "/admin/payables", label: "受け取った請求書", feature: "payables", badge: "payables_review" },
   { group: "請求・支払", href: "/admin/payables/schedule", label: "支払予定", feature: "payables" },
+  // E-05 請求書の作成・発行(02 の画面一覧。「請求・支払 ＞ 請求書の発行」)
+  { group: "請求・支払", href: "/admin/invoices", label: "請求書の発行", feature: "receivables" },
+  // E-06 入金消込(02 の画面一覧。「請求・支払 ＞ 入金消込」。未消込の入金の件数を出す)
+  { group: "請求・支払", href: "/admin/deposits", label: "入金消込", feature: "receivables", badge: "deposits_unmatched" },
   // E-02 勤怠チェック・シフトとの突合(02 の画面一覧)
   { group: "勤怠・給与", href: "/admin/attendance", label: "勤怠の一覧", feature: "attendance_admin" },
   { group: "勤怠・給与", href: "/admin/attendance/shifts", label: "シフト", feature: "attendance_admin" },

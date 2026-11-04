@@ -63,7 +63,35 @@ http://localhost:3000 で確認できる。
   - 返信のひな形（D-02 の担当。D-03 が先に使う）とよくある質問（D-03）は `0014_D-02_reply_templates.sql` → `0015_D-03_faq_entries.sql`（0013 の後）
   - 特注の単価表・案件（D-04）は `0016_D-04_custom_price_items.sql` → `0017_D-04_custom_quotes.sql`（0015 の後）。単価の値は入れていない（画面で登録する）
   - 画像・PDFの記録（C-01 の共通の仕組み）と受け取った請求書（E-04）は `0024_C-01_stored_files.sql` → `0025_E-04_received_invoices.sql`（0023 の後）
+  - 自社の情報と発行する請求書（E-05）は `0026_E-05_company_settings.sql` → `0027_E-05_invoices.sql`（0025 の後）。自社の情報の値は入っていない（下の「自社の情報」）
 - すべてのテーブルで RLS を有効にしている。アプリはサーバーからだけ接続する。
+
+## 自社の情報（請求書・発注書に載せる）
+
+請求書（E-05）・発注書（A-03）に載せる会社名・登録番号・振込先は、テーブル `company_settings`（1行だけ）に入れる。
+画面からは直せない。値はすみたや様の実データなので、**リポジトリ（このファイルやSQLのファイル）には書かない**。
+Supabase の SQL Editor で、次の例の値を実際のものに置き換えて実行する（`0026` の後）。会社名と登録番号が空のあいだは、請求書を発行できない（下書きは作れる）。
+
+```sql
+insert into public.company_settings (
+  id, company_name, postal_code, address, tel, fax, email, registration_no,
+  bank_name, bank_branch, bank_account_type, bank_account_no, bank_account_holder, rounding
+) values (
+  1, 'ここに会社名', '000-0000', 'ここに住所', '000-000-0000', null, null, 'T0000000000000',
+  'ここに銀行名', 'ここに支店名', '普通', '0000000', 'ここに口座名義（カナ）', 'floor'
+)
+on conflict (id) do update set
+  company_name = excluded.company_name, postal_code = excluded.postal_code, address = excluded.address,
+  tel = excluded.tel, fax = excluded.fax, email = excluded.email, registration_no = excluded.registration_no,
+  bank_name = excluded.bank_name, bank_branch = excluded.bank_branch, bank_account_type = excluded.bank_account_type,
+  bank_account_no = excluded.bank_account_no, bank_account_holder = excluded.bank_account_holder,
+  rounding = excluded.rounding;
+```
+
+- 登録番号は `T` と数字13けた（ハイフン・空白は発行のときに取り除く）。登録されているかは、国税庁の公表サイトで人が確かめる。
+- `bank_account_type` は `普通` か `当座`。振込先が空なら、請求書に振込先の欄を出さない。
+- `rounding` は消費税の端数処理（`floor` 切り捨て・`round` 四捨五入・`ceil` 切り上げ）。【仮】切り捨て。
+- 発行済みの請求書は発行のときの値を写して持つので、後で値を直しても変わらない（下書きと、これから発行する請求書に効く）。
 
 ## 画像・PDFの置き場（Supabase Storage）
 
