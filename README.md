@@ -37,18 +37,27 @@ http://localhost:3000 で確認できる。
 | `LINE_LOGIN_CHANNEL_SECRET` | 同じく LINEログインのチャネルシークレット |
 | `LINE_NOTIFY_ENABLED` | `1` のときだけ実際に LINE へ送る。それ以外は送らずに記録だけ残す（試運転用） |
 | `LINE_DAILY_PUSH_LIMIT` | 1日に送る LINE の上限の通数（空なら 30） |
+| `GEMINI_API_KEY` | AI（Gemini）の APIキー。無いときは AI は「停止中」の扱いになり、種類は手で選ぶ（取り込み・手での分類・返信の記録は使える） |
+| `GEMINI_MODEL` | 使うモデル名。空なら `gemini-3.5-flash-lite`（無料版でも使える安定版の軽いモデル） |
+| `AI_DAILY_LIMIT` | 1日の上限の回数（参考の表示用。空なら 20） |
+| `AI_STOP_AT` | この回数に達したら AI を止める（空なら 18）。1日の区切りは太平洋時間の0時（日本の16時か17時） |
+| `AI_WARN_AT` | この回数に達したら「残りわずか」を出し、取り込みのときの自動の分類をやめる（空なら 15） |
 | `CRON_SECRET` | 毎朝の定期実行（`/api/cron/daily`）の合言葉（16文字以上のランダムな文字列）。Vercel に設定すると、Cron が呼ぶときに自動で付けて送る |
 
 - ビルドのときはDBにつながない（DBには最初の問い合わせのときにつなぐ）。
 - メールの設定が無いときは、送信の操作がエラーになり、メールは送られない。
 - LINE の設定が無いとき・`LINE_NOTIFY_ENABLED` が `1` でないときは、LINE は送られない（タスクは画面で見られる）。
+- AI の回数は全機能で共有して数える（`ai_requests` の行）。キー・モデル・回数は環境変数だけで変えられる（有料のキーに切り替えるときもコードは直さない）。有料版にしたら `AI_DAILY_LIMIT`・`AI_STOP_AT`・`AI_WARN_AT` を契約に合わせて上げる。
+- **Gemini の無料版のキーでは、送った内容が Google のサービスの改善に使われることがある。お試しの間は実際のお客様のメールを使わず、架空の文面で確かめる。**（本文のメールアドレス・電話番号は伏せて送るが、名前などは伏せない）
+- AI のエラー（キーが無い・キーが間違い・回数の上限・モデル名の間違い）は画面に文で出し、種類は手で選べる。キー・モデル名の間違いは `ai_requests.error_message` に Google のエラーの種類（例: `HTTP 400 INVALID_ARGUMENT API_KEY_INVALID`）が残る。
 - `SITE_URL` は LINE の本文のリンクと、LINEログインの戻り先（`{SITE_URL}/auth/line/link/callback`）にも使う。
 
 ## データベース
 
 - テーブルは `db/migrations/` の SQL で作る。番号の順に、Supabase の SQL Editor で1回ずつ実行する。
-  - `0001_E-01_work_locations.sql`（打刻の場所・共通のトリガー）→ `0002_CMN-02_employees.sql`（従業員）→ … → `0010_CMN-03_cron_runs.sql`
+  - `0001_E-01_work_locations.sql`（打刻の場所・共通のトリガー）→ `0002_CMN-02_employees.sql`（従業員）→ … → `0013_D-01_ai_requests.sql`
   - タスク・通知（CMN-03）は `0008_CMN-03_tasks.sql` → `0009_CMN-03_notification_logs.sql` → `0010_CMN-03_cron_runs.sql`
+  - 問い合わせ・AI（D-01）は `0011_D-01_inquiries.sql` → `0012_D-01_inquiry_replies.sql` → `0013_D-01_ai_requests.sql`（0010 の後）
 - すべてのテーブルで RLS を有効にしている。アプリはサーバーからだけ接続する。
 
 ## 定期実行（cron）

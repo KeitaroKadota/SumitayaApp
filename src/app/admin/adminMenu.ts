@@ -24,6 +24,8 @@ export type AdminMenuGroup = (typeof ADMIN_MENU_GROUPS)[number];
 const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // CMN-03 タスク・通知(02 の G03)
   { group: "タスク", href: "/admin/tasks", label: "全員のタスク", feature: "tasks_admin" },
+  // D-01 問い合わせの取り込み・分類(02 の G01)
+  { group: "問い合わせ", href: "/admin/inquiries", label: "問い合わせ", feature: "inquiries" },
   // CMN-02 マスタ管理(02 の画面一覧)
   { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" },
   { group: "マスタ", href: "/admin/products", label: "商品", feature: "products" },
