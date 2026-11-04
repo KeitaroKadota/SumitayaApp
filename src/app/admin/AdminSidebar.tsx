@@ -4,11 +4,14 @@
 // 出す項目は layout(サーバー)で権限に従って選んで渡す。ここでは選択中の印だけを付ける。
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { AdminMenuGroup, AdminMenuItem } from "./adminMenu";
+import { Badge } from "@/components/Badge";
+import type { AdminMenuBadge, AdminMenuGroup, AdminMenuItem } from "./adminMenu";
 
 type MenuGroup = { group: AdminMenuGroup; items: AdminMenuItem[] };
 
-function MenuLinks({ menu }: { menu: MenuGroup[] }) {
+type MenuBadges = Partial<Record<AdminMenuBadge, number>>;
+
+function MenuLinks({ menu, badges }: { menu: MenuGroup[]; badges: MenuBadges }) {
   const pathname = usePathname();
 
   if (menu.length === 0) {
@@ -37,7 +40,8 @@ function MenuLinks({ menu }: { menu: MenuGroup[] }) {
                   active ? "border-accent bg-primary-soft font-bold text-primary" : "border-transparent text-ink hover:bg-canvas"
                 }`}
               >
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.badge && (badges[item.badge] ?? 0) > 0 && <Badge tone="warning">{badges[item.badge]}</Badge>}
               </Link>
             );
           })}
@@ -50,10 +54,12 @@ function MenuLinks({ menu }: { menu: MenuGroup[] }) {
 export function AdminSidebar({
   name,
   menu,
+  badges = {},
   logoutSlot,
 }: {
   name: string;
   menu: MenuGroup[];
+  badges?: MenuBadges;
   logoutSlot: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -71,7 +77,7 @@ export function AdminSidebar({
           <p className="mt-1 truncate text-sm text-ink-muted">{name}</p>
         </div>
         <nav aria-label="管理画面のメニュー" className="flex flex-1 flex-col gap-2 p-3">
-          <MenuLinks menu={menu} />
+          <MenuLinks menu={menu} badges={badges} />
         </nav>
         <div className="flex flex-col gap-2 border-t border-line p-3">
           <Link
@@ -89,7 +95,7 @@ export function AdminSidebar({
         <details className="min-w-0 flex-1">
           <summary className="flex min-h-12 cursor-pointer list-none items-center font-bold text-ink">≡ メニュー</summary>
           <nav aria-label="管理画面のメニュー" className="flex flex-col gap-2 pb-3">
-            <MenuLinks menu={menu} />
+            <MenuLinks menu={menu} badges={badges} />
             {logoutSlot}
           </nav>
         </details>

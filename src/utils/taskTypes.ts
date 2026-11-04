@@ -18,8 +18,8 @@ export const TASK_TYPES = {
   // E-02 勤怠の確認。管理者あて(attendance_alert)と本人あて(_self)。異常が直る・確認済みになると E-02 が自動で完了にする(E-02 01 7章)
   attendance_alert: { label: "勤怠の確認", feature: "E-02", manualComplete: false },
   attendance_alert_self: { label: "勤怠の確認", feature: "E-02", manualComplete: false },
-  // E-04 受け取った請求書の確認(【仮】E-04 で決める)
-  payable_review: { label: "受け取った請求書の確認", feature: "E-04", manualComplete: true },
+  // E-04 受け取った請求書の確認。「確認して支払予定にする」「取り消す」で E-04 が自動で完了にする(E-04 03 の 0.4)
+  payable_review: { label: "受け取った請求書の確認", feature: "E-04", manualComplete: false },
   // E-07 経費。承認・差し戻し、申請し直す・取り下げで閉じる
   expense_approve: { label: "経費の承認", feature: "E-07", manualComplete: false },
   expense_returned: { label: "経費の差し戻し", feature: "E-07", manualComplete: false },

@@ -42,6 +42,8 @@ http://localhost:3000 で確認できる。
 | `AI_DAILY_LIMIT` | 1日の上限の回数（参考の表示用。空なら 20） |
 | `AI_STOP_AT` | この回数に達したら AI を止める（空なら 18）。1日の区切りは太平洋時間の0時（日本の16時か17時） |
 | `AI_WARN_AT` | この回数に達したら「残りわずか」を出し、取り込みのときの自動の分類をやめる（空なら 15） |
+| `SUPABASE_SERVICE_ROLE_KEY` | 画像・PDF（請求書など）を Supabase Storage に保存・表示するための鍵（Supabase の Project Settings → API Keys の、従来の形式（Legacy）の `service_role` キー。みるきーと同じ。新しい形式の secret キー（`sb_secret_…`）で動くかは未確認）。**サーバー専用。画面・ログに出さない**。無いときは「ファイルの保存先が未設定です。」になり、ファイルの登録ができない（手入力はできる） |
+| `SUPABASE_URL` | （任意）Supabase のプロジェクトのURL（例: `https://xxxx.supabase.co`）。空なら `DATABASE_URL` の接続ユーザー名（`postgres.<プロジェクトID>`）から求める |
 | `CRON_SECRET` | 毎朝の定期実行（`/api/cron/daily`）の合言葉（16文字以上のランダムな文字列）。Vercel に設定すると、Cron が呼ぶときに自動で付けて送る |
 
 - ビルドのときはDBにつながない（DBには最初の問い合わせのときにつなぐ）。
@@ -60,7 +62,21 @@ http://localhost:3000 で確認できる。
   - 問い合わせ・AI（D-01）は `0011_D-01_inquiries.sql` → `0012_D-01_inquiry_replies.sql` → `0013_D-01_ai_requests.sql`（0010 の後）
   - 返信のひな形（D-02 の担当。D-03 が先に使う）とよくある質問（D-03）は `0014_D-02_reply_templates.sql` → `0015_D-03_faq_entries.sql`（0013 の後）
   - 特注の単価表・案件（D-04）は `0016_D-04_custom_price_items.sql` → `0017_D-04_custom_quotes.sql`（0015 の後）。単価の値は入れていない（画面で登録する）
+  - 画像・PDFの記録（C-01 の共通の仕組み）と受け取った請求書（E-04）は `0024_C-01_stored_files.sql` → `0025_E-04_received_invoices.sql`（0023 の後）
 - すべてのテーブルで RLS を有効にしている。アプリはサーバーからだけ接続する。
+
+## 画像・PDFの置き場（Supabase Storage）
+
+請求書（E-04）・納品書（C-01）・領収書（E-07）の画像・PDFは、Supabase Storage のバケット `sumitaya-files` に置く。
+最初にファイルを保存するときにアプリが自動で作るが、設定を確かめるため、先に画面で作っておく。
+
+1. Supabase のプロジェクトの **Storage** を開き、**New bucket** を押す。
+2. Name に `sumitaya-files` と入れ、**Public bucket はオフ**（非公開）のままにする。
+3. 追加の設定（Additional configuration）で、ファイルの大きさの上限を `10 MB`、受け付ける種類（Allowed MIME types）を `image/jpeg, image/png, image/webp, application/pdf` にして作る（画面の項目名は Supabase の版で少し違うことがある）。
+4. ポリシー（Policies）は作らない（アプリはサーバーから `SUPABASE_SERVICE_ROLE_KEY` で操作し、ブラウザには直接見せない。見るときは10分だけ使えるURLを毎回作る）。
+
+- 画像は端末で長い辺2,000pxに縮小してからサーバー経由で送る（4MBまで）。PDF はサーバーが出す署名付きのアップロード用URLで、ブラウザから Storage へ直接送る（10MBまで）。
+- 消したファイルは記録（`stored_files.deleted_at`）だけ先に消える。置き場の実物は30日後に手で消す。送っただけで記録されなかったファイル（途中で画面を閉じたなど）も置き場に残るので、ときどき `stored_files` に無いものを手で消す（自動化は後で）。
 
 ## 定期実行（cron）
 

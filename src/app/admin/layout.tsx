@@ -1,4 +1,5 @@
-import { fullName, getCurrentEmployee } from "@/utils/auth";
+import { canAccess, fullName, getCurrentEmployee } from "@/utils/auth";
+import { countPayablesByTab } from "@/utils/payablesServer";
 import { LogoutButton } from "@/components/LogoutButton";
 import { AdminSidebar } from "./AdminSidebar";
 import { visibleAdminMenu } from "./adminMenu";
@@ -12,9 +13,19 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     return <>{children}</>;
   }
 
+  // 左メニューの件数のバッジ(E-04 の確認待ちの請求書)。数えられなくてもメニューは出す
+  const badges: { payables_review?: number } = {};
+  if (canAccess(me.roles, "payables")) {
+    try {
+      badges.payables_review = (await countPayablesByTab()).needs_review;
+    } catch (e) {
+      console.error("確認待ちの請求書を数えられませんでした:", e instanceof Error ? e.message : e);
+    }
+  }
+
   return (
     <div className="min-h-screen md:flex">
-      <AdminSidebar name={fullName(me)} menu={visibleAdminMenu(me.roles)} logoutSlot={<LogoutButton />} />
+      <AdminSidebar name={fullName(me)} menu={visibleAdminMenu(me.roles)} badges={badges} logoutSlot={<LogoutButton />} />
       <div className="min-w-0 flex-1 p-6">
         <div className="mx-auto max-w-6xl">{children}</div>
       </div>

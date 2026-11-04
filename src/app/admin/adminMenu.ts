@@ -5,7 +5,15 @@ import { canAccess, type FeatureKey, type Role } from "@/utils/permissions";
 // 例: { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" }
 
 // feature を並びで書いたときは、どれか1つでも使えれば出す(B-01 の在庫の一覧は orders か inventory)
-export type AdminMenuItem = { group: AdminMenuGroup; href: string; label: string; feature: FeatureKey | FeatureKey[] };
+// badge: 件数のバッジを出す項目(数は layout が求めて渡す。00_画面共通ルール 5.2)
+export type AdminMenuBadge = "payables_review";
+export type AdminMenuItem = {
+  group: AdminMenuGroup;
+  href: string;
+  label: string;
+  feature: FeatureKey | FeatureKey[];
+  badge?: AdminMenuBadge;
+};
 
 // 区切りの並び(G05 の左メニューの順)。
 // 【仮】「タスク」の区切りは CMN-01 の G05 に無いので、先頭に置いた(00_仮決め一覧 CMN03-仮-15)
@@ -39,6 +47,9 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // B-01 CROSS MALL からの受注・在庫の取り込み(02 の G01・G05)。「例外注文(B-02)」は B-02 の画面を作るときに足す
   { group: "受注・在庫", href: "/admin/orders", label: "受注", feature: "orders" },
   { group: "受注・在庫", href: "/admin/inventory", label: "在庫", feature: ["orders", "inventory"] },
+  // E-04 受け取った請求書の読み取り・支払予定(02 の画面一覧。「受け取った請求書」には確認待ちの件数を出す)
+  { group: "請求・支払", href: "/admin/payables", label: "受け取った請求書", feature: "payables", badge: "payables_review" },
+  { group: "請求・支払", href: "/admin/payables/schedule", label: "支払予定", feature: "payables" },
   // E-02 勤怠チェック・シフトとの突合(02 の画面一覧)
   { group: "勤怠・給与", href: "/admin/attendance", label: "勤怠の一覧", feature: "attendance_admin" },
   { group: "勤怠・給与", href: "/admin/attendance/shifts", label: "シフト", feature: "attendance_admin" },
