@@ -1,5 +1,6 @@
 import { canAccess, fullName, getCurrentEmployee } from "@/utils/auth";
 import { countUnmatchedDeposits } from "@/utils/depositsServer";
+import { countSubmittedExpenses } from "@/utils/expenseClaimsServer";
 import { countPayablesByTab } from "@/utils/payablesServer";
 import { LogoutButton } from "@/components/LogoutButton";
 import { AdminSidebar } from "./AdminSidebar";
@@ -15,7 +16,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   }
 
   // 左メニューの件数のバッジ(E-04 の確認待ちの請求書、E-06 の未消込の入金)。数えられなくてもメニューは出す
-  const badges: { payables_review?: number; deposits_unmatched?: number } = {};
+  const badges: { payables_review?: number; deposits_unmatched?: number; expenses_submitted?: number } = {};
   if (canAccess(me.roles, "payables")) {
     try {
       badges.payables_review = (await countPayablesByTab()).needs_review;
@@ -31,6 +32,13 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     }
   }
 
+  if (canAccess(me.roles, "expenses_admin")) {
+    try {
+      badges.expenses_submitted = await countSubmittedExpenses();
+    } catch (e) {
+      console.error("承認待ちの経費を数えられませんでした:", e instanceof Error ? e.message : e);
+    }
+  }
   return (
     <div className="min-h-screen md:flex">
       <AdminSidebar name={fullName(me)} menu={visibleAdminMenu(me.roles)} badges={badges} logoutSlot={<LogoutButton />} />
