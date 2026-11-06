@@ -45,7 +45,7 @@ export type AiFile = { bytes: Uint8Array; mimeType: string };
 
 export type AiUnavailableReason = "disabled" | "quota" | "error" | "invalid" | "timeout";
 
-// 「使えない」の細かい理由(画面の文を分けるため。設定の間違いは、門田さんが環境変数を直せば戻る)
+// 「使えない」の細かい理由(画面の文を分けるため。設定の間違いは、角田さんが環境変数を直せば戻る)
 export type AiFailureDetail = "no_key" | "bad_key" | "bad_model" | "limit" | null;
 
 export type AiResult<T> =

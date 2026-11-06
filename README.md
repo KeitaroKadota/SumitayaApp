@@ -28,7 +28,7 @@ http://localhost:3000 で確認できる。
 | `DATABASE_URL` | Supabase の接続URL（Transaction pooler） |
 | `SESSION_SECRET` | ログイン状態・再設定リンクの署名に使う秘密の文字列（32文字以上） |
 | `SITE_URL` | メールに書くURLの起点（例: Vercel の本番URL。末尾の `/` は不要） |
-| `MAIL_FROM_ADDRESS` | メールの送信元のアドレス（Gmail API で送るアカウント。当面は門田さんの Gmail） |
+| `MAIL_FROM_ADDRESS` | メールの送信元のアドレス（Gmail API で送るアカウント。当面は角田さんの Gmail） |
 | `GOOGLE_OAUTH_CLIENT_ID` | Gmail API でメールを送るための OAuth クライアントID |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | 同じく OAuth クライアントシークレット |
 | `GOOGLE_OAUTH_REFRESH_TOKEN` | 同じく送信元のアカウント（`MAIL_FROM_ADDRESS`）で発行したリフレッシュトークン（`gmail.send`） |

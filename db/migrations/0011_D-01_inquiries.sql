@@ -49,7 +49,7 @@ create table public.inquiries (
   created_by uuid references public.employees (id),
   updated_by uuid references public.employees (id),
 
-  constraint inquiries_category_source_check check ((category is null) = (category_source is null)),
+  constraint inquiries_category_pair_check check ((category is null) = (category_source is null)),
   constraint inquiries_not_own_parent_check check (parent_inquiry_id is null or parent_inquiry_id <> id)
 );
 

@@ -60,7 +60,7 @@ create table public.expenses (
   created_by uuid references public.employees (id),
   updated_by uuid references public.employees (id),
   -- CH-05 合計は内訳の合計。下書きは読み取ったまま(合わないことがある)を残し、画面で「⚠ 要確認」を出すため除く
-  constraint expenses_total_check check (status = 'draft' or total = total_10 + total_8 + total_exempt),
+  constraint expenses_total_breakdown_check check (status = 'draft' or total = total_10 + total_8 + total_exempt),
   -- 申請より後は、支払った日・支払先・合計が入っている(CH-04)
   constraint expenses_submitted_fields_check
     check (status in ('draft', 'withdrawn') or (spent_on is not null and payee_name is not null and total >= 1)),

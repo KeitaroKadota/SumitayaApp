@@ -27,7 +27,7 @@ create table public.bank_accounts (
   created_by uuid references public.employees (id),
   updated_by uuid references public.employees (id),
   -- CH-12 ネットバンキングなしの口座には CSV の形を設定できない
-  constraint bank_accounts_csv_format_check check (csv_format is null or has_online_banking)
+  constraint bank_accounts_csv_needs_online_check check (csv_format is null or has_online_banking)
 );
 
 create index bank_accounts_sort_idx on public.bank_accounts (is_active, sort_order);

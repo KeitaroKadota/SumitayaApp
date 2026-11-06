@@ -1,5 +1,5 @@
 // LINE ログイン(みるきーの line.ts を流用。CMN-03 01 4.2・7.4)。
-// すみたやでは LINE でログインはしない。通知の宛先(本人の LINE の ID)を取るためだけに使う(2026-11-03 門田さん承認)。
+// すみたやでは LINE でログインはしない。通知の宛先(本人の LINE の ID)を取るためだけに使う(2026-11-03 角田さん承認)。
 // チャネルは、通知を送る公式アカウント(Messaging API)と同じプロバイダーに作ること(違うと ID が別になり通知が届かない)。
 const LINE_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize";
 const LINE_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token";

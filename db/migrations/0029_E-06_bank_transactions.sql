@@ -39,7 +39,7 @@ create table public.bank_transactions (
   updated_at timestamptz not null default now(),
   constraint bank_transactions_amount_check check ((deposit > 0) <> (withdrawal > 0)),
   -- CH-05 出金は対象外だけ
-  constraint bank_transactions_withdrawal_check check (deposit > 0 or match_status = 'ignored'),
+  constraint bank_transactions_deposit_or_ignored_check check (deposit > 0 or match_status = 'ignored'),
   -- 消込済みのときだけ請求書・消し込んだ人・日時がある
   constraint bank_transactions_matched_check check (
     (match_status = 'matched' and invoice_id is not null and matched_at is not null)
