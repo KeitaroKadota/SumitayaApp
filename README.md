@@ -8,7 +8,7 @@
 - Tailwind CSS
 - Supabase（PostgreSQL）。接続は `postgres`（`src/utils/db.ts`）
 - ログイン状態の署名は `jose`
-- Vercel ※導入予定
+- Vercel（main が本番、作業ブランチは Preview）
 
 ## 開発
 
@@ -22,6 +22,7 @@ http://localhost:3000 で確認できる。
 ## 環境変数
 
 `.env.local`（開発）と Vercel の設定（本番）に入れる。**値はリポジトリに書かない。**
+`.env.local` は Git に載らないので、Vercel には Settings → Environment Variables で別に入れ、入れたあとに Redeploy する。
 
 | 名前 | 用途 |
 |---|---|
