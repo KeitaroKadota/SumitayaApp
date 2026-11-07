@@ -123,6 +123,60 @@ function MessageView({ m }: { m: InquiryMessage }) {
   );
 }
 
+// 項目と内容の2列の表(特注の仕様など、項目が多いものを見やすくする)
+function ItemTable({ rows }: { rows: [string, string][] }) {
+  return (
+    <table className="w-full border border-line text-sm">
+      <thead className="bg-canvas text-left">
+        <tr>
+          <th className="w-32 border-b border-line px-3 py-1.5 font-bold">項目</th>
+          <th className="border-b border-line px-3 py-1.5 font-bold">内容</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([label, value]) => (
+          <tr key={label} className="border-b border-line last:border-b-0">
+            <th scope="row" className="bg-canvas/50 px-3 py-1.5 text-left align-top font-normal text-ink-muted">
+              {label}
+            </th>
+            <td className="whitespace-pre-wrap break-words px-3 py-1.5">{value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// 商品の候補の表(商品名・サイズ・色・数量)
+function ProductTable({ products }: { products: NonNullable<InquiryExtracted["products"]> }) {
+  const cell = "px-3 py-1.5 align-top";
+  return (
+    <table className="w-full border border-line text-sm">
+      <thead className="bg-canvas text-left">
+        <tr className="border-b border-line">
+          <th className={`${cell} font-bold`}>商品名</th>
+          <th className={`${cell} font-bold`}>サイズ</th>
+          <th className={`${cell} font-bold`}>色</th>
+          <th className={`${cell} text-right font-bold`}>数量</th>
+        </tr>
+      </thead>
+      <tbody>
+        {products.map((p, i) => (
+          <tr key={i} className="border-b border-line last:border-b-0">
+            <td className={`${cell} break-words`}>
+              {p.name ?? "—"}
+              {p.code && <span className="text-ink-muted">（{p.code}）</span>}
+            </td>
+            <td className={cell}>{p.size ?? "—"}</td>
+            <td className={cell}>{p.color ?? "—"}</td>
+            <td className={`${cell} text-right`}>{p.quantity ?? "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function ExtractedView({ x }: { x: InquiryExtracted }) {
   const rows: [string, string][] = [];
   const push = (label: string, value: string | null | undefined) => {
@@ -130,34 +184,37 @@ function ExtractedView({ x }: { x: InquiryExtracted }) {
   };
   push("お客様の名前", x.customer_name);
   push("注文番号", x.order_number);
-  push(
-    "商品",
-    (x.products ?? [])
-      .map((p) => [p.name, p.code, p.size, p.color].filter(Boolean).join(" ") + (p.quantity ? ` ${p.quantity}点` : ""))
-      .filter(Boolean)
-      .join("／")
-  );
   push("希望日", x.desired_date ? formatDate(x.desired_date) : null);
   push("よくある質問の話題", (x.faq_topics ?? []).map((t) => FAQ_TOPICS[t] ?? t).join("・"));
-  push(
-    "特注の仕様",
-    Object.entries(x.custom_spec ?? {})
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${CUSTOM_SPEC_FIELDS[k as keyof typeof CUSTOM_SPEC_FIELDS] ?? k}: ${v}`)
-      .join("／")
-  );
   push("返品の理由", x.return_reason ? (RETURN_REASONS[x.return_reason] ?? x.return_reason) : null);
   push("ほかの話題", x.other_topics);
-  if (rows.length === 0) return <p className="text-sm text-ink-muted">抜き出した情報はありません。</p>;
+
+  const products = (x.products ?? []).filter((p) => p.name || p.code || p.size || p.color || p.quantity);
+  // 特注の仕様は、決まった項目の順(CUSTOM_SPEC_FIELDS)に並べる
+  const spec = x.custom_spec ?? {};
+  const specRows: [string, string][] = (Object.keys(CUSTOM_SPEC_FIELDS) as (keyof typeof CUSTOM_SPEC_FIELDS)[])
+    .filter((k) => spec[k])
+    .map((k) => [CUSTOM_SPEC_FIELDS[k], spec[k] as string]);
+
+  if (rows.length === 0 && products.length === 0 && specRows.length === 0) {
+    return <p className="text-sm text-ink-muted">抜き出した情報はありません。</p>;
+  }
   return (
-    <dl className="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-1 text-sm">
-      {rows.map(([label, value]) => (
-        <div key={label} className="contents">
-          <dt className="text-ink-muted">{label}</dt>
-          <dd className="break-words">{value}</dd>
+    <div className="flex flex-col gap-4">
+      {rows.length > 0 && <ItemTable rows={rows} />}
+      {products.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-bold">商品</h3>
+          <ProductTable products={products} />
         </div>
-      ))}
-    </dl>
+      )}
+      {specRows.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-bold">特注の仕様</h3>
+          <ItemTable rows={specRows} />
+        </div>
+      )}
+    </div>
   );
 }
 
