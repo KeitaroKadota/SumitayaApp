@@ -1,4 +1,5 @@
 // 経費精算(E-07)の決まりと計算(01 4.1・4.2・7.2・7.3、03 の 0.2・0.3、04 CH-04〜CH-13・CH-17・CH-19)。
+// 0.4 で承認の段階をなくした(下書き → 登録で確定。No.33・2026-11-08 角田さん決定)。
 // ファイル名は、みるきーの expenses.ts(保護者への実費の請求)と取り違えないよう expenseClaims にした(03 の 0章)。
 // 合計の検算・消費税額の検算・二重計上の疑いの判定・規程の確認はすべてここの計算で行う(AIは読むだけ。01 の 1章)。
 // DBを読まない計算だけのファイルなので、画面の部品(クライアント)からも使える。DBを読む処理は expenseClaimsServer.ts。
@@ -29,12 +30,10 @@ import { isValidDateStr, parseNonNegativeInt, toHalfWidth } from "@/utils/textNo
 
 // ---- 決まった値 ----
 
+// 01 4.1 状態(下書き・登録済みの2つ)
 export const EXPENSE_STATUSES = {
   draft: "下書き",
-  submitted: "承認待ち",
-  returned: "差し戻し",
-  approved: "承認済み",
-  withdrawn: "取り下げ",
+  confirmed: "登録済み",
 } as const;
 export type ExpenseStatus = keyof typeof EXPENSE_STATUSES;
 export const isExpenseStatus = (v: string): v is ExpenseStatus => Object.hasOwn(EXPENSE_STATUSES, v);
@@ -60,8 +59,6 @@ export const EXPENSE_LIMITS = {
   purpose: 200,
   attendees: 200,
   noReceiptReason: 100,
-  approveNote: 200,
-  returnReason: 200,
 } as const;
 
 // 印(check_flags)にするチェック(03 の 0.3)。一覧で先に出す順(いちばん大事なものを先に)
@@ -263,10 +260,11 @@ export const yearsBefore = (today: string, years: number): string => {
 // CH-07 これより前の日付は「1年より前」
 export const oldestSpentOn = (today: string): string => yearsBefore(today, OLDEST_RECEIPT_YEARS);
 
-// mode: draft(下書きを保存する。必須の欠けは止めない) / submit(申請する)
+// mode: draft(下書きを保存する。必須の欠けは止めない) / confirm(登録する。確定)
+// 勘定科目が空のときは、呼ぶ側で推定し直してから確かめる(EV-08 手順3。confirmTitleErrors)
 export const parseExpenseForm = (
   values: Record<string, string>,
-  mode: "draft" | "submit",
+  mode: "draft" | "confirm",
   ctx: { today: string; hasReceipt: boolean; titles: readonly AccountTitle[]; currentTitleId: string | null }
 ): ParseResult => {
   const errors: Record<string, string> = {};
@@ -315,7 +313,7 @@ export const parseExpenseForm = (
   const method = text("payment_method") || "cash";
   if (!isExpensePaymentMethod(method)) errors.payment_method = "支払い方を選んでください。";
 
-  // 勘定科目は申請では任意(CH-04)。選んだときは、使っている科目であること
+  // 勘定科目は登録で必須(CH-04。空なら呼ぶ側が推定し直して確かめる)。選んだときは、使っている科目であること
   const titleId = text("account_title_id") || null;
   const title = titleId ? ctx.titles.find((t) => t.id === titleId) : undefined;
   if (titleId && (!title || (!title.isActive && titleId !== ctx.currentTitleId))) errors.account_title_id = "勘定科目を選び直してください。";
@@ -326,18 +324,18 @@ export const parseExpenseForm = (
   const total10 = breakdownEmpty ? totalValue : (total10In ?? 0);
   const total8 = breakdownEmpty ? 0 : (total8In ?? 0);
   const totalExempt = breakdownEmpty ? 0 : (exemptIn ?? 0);
-  if (breakdownEmpty && totalValue > 0) notices.push("内訳を10％として申請します。");
+  if (breakdownEmpty && totalValue > 0) notices.push("内訳を10％として登録します。");
   // CH-06 消費税額が空なら、計算した値(切り捨て)を入れる
   const tax10 = tax10In ?? taxFromIncluded(total10, 10);
   const tax8 = tax8In ?? taxFromIncluded(total8, 8);
 
-  if (mode === "submit") {
+  if (mode === "confirm") {
     // CH-04 必須の項目
     if (!spentRaw) errors.spent_on = "支払った日を入力してください。";
     if (spentOn) {
       // CH-07 今日より後・1年より前はエラー
       if (spentOn > ctx.today) errors.spent_on = "支払った日が未来の日付です。";
-      else if (spentOn < oldestSpentOn(ctx.today)) errors.spent_on = "1年より前の領収書は申請できません。経理にご相談ください。";
+      else if (spentOn < oldestSpentOn(ctx.today)) errors.spent_on = "1年より前の領収書は登録できません。";
     }
     if (!payeeName && !errors.payee_name) errors.payee_name = "支払先を入力してください。";
     if (total === null && !errors.total) errors.total = "合計の金額を入力してください。";
@@ -357,7 +355,7 @@ export const parseExpenseForm = (
   if (Object.keys(errors).length > 0 || !isExpensePaymentMethod(method)) return { ok: false, errors };
   return {
     ok: true,
-    notices: mode === "submit" ? notices : [],
+    notices: mode === "confirm" ? notices : [],
     input: {
       spentOn,
       payeeName,
@@ -378,7 +376,17 @@ export const parseExpenseForm = (
   };
 };
 
-// ---- 03 の 0.3 チェックの印(申請は止めない。承認者に目立たせる) ----
+// CH-04 勘定科目(登録で必須・使っている科目)と CH-11 の1(交際費・会議費は相手先・人数が必須)。
+// 推定し直した科目でも確かめるため、parseExpenseForm とは分けた(EV-08 手順2・3)
+export const confirmTitleErrors = (title: AccountTitle | undefined, attendees: string | null): Record<string, string> => {
+  const errors: Record<string, string> = {};
+  if (!title || !title.isActive) errors.account_title_id = "勘定科目を選んでください。";
+  else if (needsAttendees(title.name) && !attendees)
+    errors.attendees = "相手先と人数を入力してください（例: 〇〇町内会 山田様ほか2名、計4名）。";
+  return errors;
+};
+
+// ---- 03 の 0.3 チェックの印(登録は止めない。登録の前に本人に見せ、登録後は一覧で目立たせる) ----
 
 export type DuplicateHit = { id: string; applicantName: string; spentOn: string | null; total: number };
 export type Flag = { code: (typeof FLAG_ORDER)[number]; message: string };
@@ -395,14 +403,14 @@ export type CheckTarget = {
 };
 
 export const duplicateMessage = (d: DuplicateHit): string =>
-  `同じ領収書がすでに申請されている可能性があります（${d.spentOn ? `${formatDateShort(d.spentOn)} ` : ""}${d.applicantName} ${formatYen(d.total)}）。`;
+  `同じ領収書がすでに登録されている可能性があります（${d.spentOn ? `${formatDateShort(d.spentOn)} ` : ""}${d.applicantName} ${formatYen(d.total)}）。`;
 
 // 日付の差(日)
 const daysBetween = (from: string, to: string): number =>
   Math.round((Date.UTC(+to.slice(0, 4), +to.slice(5, 7) - 1, +to.slice(8, 10)) - Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8, 10))) / 86_400_000);
 
-// CH-06・CH-09・CH-10・CH-11 の2・CH-12。submittedOn は申請した日(日本時間)。二重計上の疑いの相手は呼ぶ側が DB で探して渡す
-export const runExpenseChecks = (e: CheckTarget, submittedOn: string, duplicate: DuplicateHit | null): Flag[] => {
+// CH-06・CH-09・CH-10・CH-11 の2・CH-12。confirmedOn は登録した日(日本時間)。二重計上の疑いの相手は呼ぶ側が DB で探して渡す
+export const runExpenseChecks = (e: CheckTarget, confirmedOn: string, duplicate: DuplicateHit | null): Flag[] => {
   const flags: Flag[] = [];
   // CH-09 二重計上の疑い
   if (duplicate) flags.push({ code: "CH-09", message: duplicateMessage(duplicate) });
@@ -418,14 +426,14 @@ export const runExpenseChecks = (e: CheckTarget, submittedOn: string, duplicate:
   }
   // CH-12 金額の上限(仮)
   if (e.total >= AMOUNT_CHECK_YEN)
-    flags.push({ code: "CH-12", message: `${formatQuantity(AMOUNT_CHECK_YEN / 10_000)}万円以上の経費です（事前の相談が必要か確認してください）。` });
+    flags.push({ code: "CH-12", message: `${formatQuantity(AMOUNT_CHECK_YEN / 10_000)}万円以上の経費です。` });
   if (e.titleName === SUPPLIES_TITLE_NAME && e.total >= SUPPLIES_ASSET_YEN)
     flags.push({ code: "CH-12", message: `${formatQuantity(SUPPLIES_ASSET_YEN / 10_000)}万円以上の物品は、消耗品費ではなく資産になる可能性があります。` });
   // CH-06 消費税額の検算
   if (!isTaxConsistent(e.total10, e.tax10, 10) || !isTaxConsistent(e.total8, e.tax8, 8))
     flags.push({ code: "CH-06", message: "消費税額が、金額から計算した額と合いません（読み取りの誤りの可能性）。" });
-  // CH-10 申請の期限(仮)
-  if (e.spentOn && daysBetween(e.spentOn, submittedOn) > APPLY_DEADLINE_DAYS)
+  // CH-10 登録の期限(仮)
+  if (e.spentOn && daysBetween(e.spentOn, confirmedOn) > APPLY_DEADLINE_DAYS)
     flags.push({ code: "CH-10", message: `支払った日から${APPLY_DEADLINE_DAYS}日を過ぎています。` });
   return flags;
 };
@@ -454,30 +462,7 @@ export const topFlagText = (codes: readonly string[], e: Pick<CheckTarget, "tota
   }
 };
 
-// ---- CH-14 承認できる条件・CH-15 差し戻しの理由 ----
-
-export const approveBlockers = (e: {
-  status: ExpenseStatus;
-  titleId: string | null;
-  titleActive: boolean;
-  flags: readonly string[];
-  note: string | null;
-}): Record<string, string> => {
-  const errors: Record<string, string> = {};
-  if (e.status !== "submitted") errors.status = "承認待ちの経費ではありません。画面を開き直してください。";
-  if (!e.titleId || !e.titleActive) errors.account_title_id = "勘定科目を選んでください。";
-  if (e.flags.length > 0 && !e.note) errors.approve_note = "確認が必要な点があるため、ひとことを入力してください。";
-  if (e.note && e.note.length > EXPENSE_LIMITS.approveNote) errors.approve_note = `ひとことは${EXPENSE_LIMITS.approveNote}文字以内で入力してください。`;
-  return errors;
-};
-
-export const returnReasonError = (reason: string): string | null => {
-  if (!reason) return "差し戻す理由を入力してください。本人に通知されます。";
-  if (reason.length > EXPENSE_LIMITS.returnReason) return `差し戻す理由は${EXPENSE_LIMITS.returnReason}文字以内で入力してください。`;
-  return null;
-};
-
-// ---- 01 7.3 承認済みの経費の CSV(汎用の仕訳の形・【仮】E-07-仮-14) ----
+// ---- 01 7.3 登録済みの経費の CSV(汎用の仕訳の形・【仮】E-07-仮-14) ----
 
 export const EXPENSE_CSV_HEADER = [
   "日付",
@@ -488,7 +473,7 @@ export const EXPENSE_CSV_HEADER = [
   "消費税額",
   "貸方勘定科目",
   "摘要（支払先 用途）",
-  "申請者",
+  "登録した人",
   "登録番号",
 ] as const;
 

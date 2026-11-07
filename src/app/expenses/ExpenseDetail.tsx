@@ -1,4 +1,4 @@
-// E-07 経費の内容の表示(読むだけ。02 G02 の④、G04 の右側)。G02(スマホ)と G04(PC のモーダル)で使う。
+// E-07 経費の内容の表示(読むだけ。02 G02 の③、G04 の右側)。G02(スマホ)と G04(PC のモーダル)で使う。
 import { EXPENSE_PAYMENT_METHODS, registrationNotice } from "@/utils/expenseClaims";
 import type { Expense } from "@/utils/expenseClaimsServer";
 import { formatDate, formatYen } from "@/utils/format";

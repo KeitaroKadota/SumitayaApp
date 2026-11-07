@@ -5,6 +5,7 @@
 // 新しい返事の仕様(EV-03)は欄の横に並べ、担当者が「入れる」を押した項目だけを欄に入れる(保存は「仕様を保存」)。
 import { useActionState, useState } from "react";
 import { Alert } from "@/components/Alert";
+import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Checkbox } from "@/components/Checkbox";
 import { Field, fieldDescribedBy } from "@/components/Field";
@@ -101,7 +102,9 @@ export function QuoteSpecForm({
         {text("customer_phone", "電話", { type: "tel", maxLength: CUSTOM_QUOTE_LIMITS.phone })}
       </div>
 
-      <Field id="q_item_type" label="品目" required error={e.item_type}>
+      {/* 必ず聞く項目(No.24: 希望の商品・デザイン・数量・サイズ・納期)。空なら「足りない項目」に出す(保存はできる) */}
+      <p className="border-b border-line pb-1 text-sm font-bold text-ink-muted">必ず聞く項目</p>
+      <Field id="q_item_type" label="希望の商品" required error={e.item_type}>
         <Select
           id="q_item_type"
           name="item_type"
@@ -122,8 +125,61 @@ export function QuoteSpecForm({
       </Field>
       {itemTypes.length === 0 && <p className="text-sm text-ink-muted">単価表に縫製の行がありません。先に単価表に品目を登録してください。</p>}
 
+      <Field id="q_design_note" label="デザイン" required error={e.design_note}>
+        <TextArea
+          id="q_design_note"
+          name="design_note"
+          rows={2}
+          maxLength={CUSTOM_QUOTE_LIMITS.text}
+          value={vals.design_note ?? ""}
+          onChange={(ev) => set("design_note", ev.currentTarget.value)}
+          invalid={!!e.design_note}
+          disabled={readOnly}
+          placeholder="例: 背中に「○○町」、紺地に白の染め抜き"
+        />
+      </Field>
+      <fieldset className="flex flex-col gap-2" disabled={readOnly}>
+        <legend className="flex items-center gap-2 text-sm font-bold">
+          サイズと数量 <Badge tone="required">必須</Badge>
+        </legend>
+        <div className="flex flex-wrap items-start gap-3">
+          {CUSTOM_SIZES.map((s) => {
+            const name = sizeFieldName(s);
+            return (
+              <Field key={s} id={`q_${name}`} label={s} error={e[name]}>
+                <TextInput
+                  id={`q_${name}`}
+                  name={name}
+                  inputMode="numeric"
+                  value={vals[name] ?? ""}
+                  onChange={(ev) => set(name, ev.currentTarget.value)}
+                  invalid={!!e[name]}
+                  className="w-20"
+                />
+              </Field>
+            );
+          })}
+          <Field id="q_quantity" label="合計の枚数" error={e.quantity}>
+            <TextInput
+              id="q_quantity"
+              name="quantity"
+              inputMode="numeric"
+              value={vals.quantity ?? ""}
+              onChange={(ev) => set("quantity", ev.currentTarget.value)}
+              invalid={!!e.quantity}
+              className="w-24"
+            />
+          </Field>
+        </div>
+        {sizeSum > 0 && <p className="text-sm text-ink-muted tabular-nums">内訳の合計 {sizeSum}枚（合計の枚数が空なら、この数を入れます）</p>}
+      </fieldset>
+
+      {text("desired_date", "納期（使う日）", { type: "date", required: true, className: "w-48" })}
+
+      {/* 【仮】概算にだけ使う項目(聞き返しの判定には入れない。生地をいつ聞くか・デザインに名入れが入るかは未決。D-04 01 の 4.1) */}
+      <p className="border-b border-line pb-1 text-sm font-bold text-ink-muted">概算に使う項目【仮】</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field id="q_fabric_item_id" label="生地" required error={e.fabric_item_id}>
+        <Field id="q_fabric_item_id" label="生地" error={e.fabric_item_id}>
           <Select
             id="q_fabric_item_id"
             name="fabric_item_id"
@@ -146,42 +202,8 @@ export function QuoteSpecForm({
         {text("fabric_note", "生地の希望", { maxLength: CUSTOM_QUOTE_LIMITS.text })}
       </div>
 
-      <fieldset className="flex flex-col gap-2" disabled={readOnly}>
-        <legend className="flex items-center gap-2 text-sm font-bold">サイズと枚数</legend>
-        <div className="flex flex-wrap items-start gap-3">
-          {CUSTOM_SIZES.map((s) => {
-            const name = sizeFieldName(s);
-            return (
-              <Field key={s} id={`q_${name}`} label={s} error={e[name]}>
-                <TextInput
-                  id={`q_${name}`}
-                  name={name}
-                  inputMode="numeric"
-                  value={vals[name] ?? ""}
-                  onChange={(ev) => set(name, ev.currentTarget.value)}
-                  invalid={!!e[name]}
-                  className="w-20"
-                />
-              </Field>
-            );
-          })}
-          <Field id="q_quantity" label="合計の枚数" required error={e.quantity}>
-            <TextInput
-              id="q_quantity"
-              name="quantity"
-              inputMode="numeric"
-              value={vals.quantity ?? ""}
-              onChange={(ev) => set("quantity", ev.currentTarget.value)}
-              invalid={!!e.quantity}
-              className="w-24"
-            />
-          </Field>
-        </div>
-        {sizeSum > 0 && <p className="text-sm text-ink-muted tabular-nums">内訳の合計 {sizeSum}枚（合計の枚数が空なら、この数を入れます）</p>}
-      </fieldset>
-
       <div className="flex flex-col gap-2">
-        <Field id="q_print_item_id" label="名入れ" required error={e.print_item_id}>
+        <Field id="q_print_item_id" label="名入れ" error={e.print_item_id}>
           <Select
             id="q_print_item_id"
             name="print_item_id"
@@ -211,7 +233,6 @@ export function QuoteSpecForm({
         />
       </div>
       {text("print_text", "名入れの文字・場所", { maxLength: CUSTOM_QUOTE_LIMITS.text })}
-      {text("desired_date", "希望納期（使う日）", { type: "date", required: true, className: "w-48" })}
 
       <Field id="q_spec_note" label="メモ" error={e.spec_note}>
         <TextArea

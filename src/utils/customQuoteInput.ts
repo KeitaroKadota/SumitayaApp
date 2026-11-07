@@ -65,7 +65,10 @@ export const validateQuoteSpecInput = (
 
   // CH-04 品目は縫製の行の品目
   const itemType = v("item_type") || null;
-  if (itemType && !itemTypeOptions(items).includes(itemType)) errors.item_type = "品目を単価表から選び直してください。";
+  if (itemType && !itemTypeOptions(items).includes(itemType)) errors.item_type = "希望の商品を単価表から選び直してください。";
+
+  // CH-02 デザイン(1,000文字以下。0.4 で足した)
+  const designNote = longText("design_note", "デザイン");
 
   const fabricItemId = v("fabric_item_id") || null;
   if (fabricItemId) {
@@ -116,6 +119,7 @@ export const validateQuoteSpecInput = (
     contact: { organizationName, customerName, customerEmail: email || null, customerPhone: phone || null },
     spec: {
       itemType,
+      designNote,
       fabricItemId,
       fabricNote,
       sizeBreakdown: breakdown.length > 0 ? breakdown : null,

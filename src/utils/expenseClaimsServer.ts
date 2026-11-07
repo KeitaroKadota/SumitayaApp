@@ -1,4 +1,4 @@
-// 経費精算(E-07)のDBの読み書き(03 の 0.1〜0.4、EV-01〜EV-18)。
+// 経費精算(E-07)のDBの読み書き(03 の 0.1〜0.3、EV-01〜EV-18)。0.4 で承認の段階とタスクをなくした(下書き → 登録で確定)。
 // 権限チェックはしない(呼ぶ側の画面・操作で requireAccess を済ませている前提)。
 // 本人の経費だけを読む・書く関数は applicantId を受け取り、where に入れる(CH-02)。
 // 判定(検算・二重計上・規程)は expenseClaims.ts の計算で行う。AIを呼ぶのは readReceiptWithAi だけ。
@@ -6,25 +6,24 @@ import { query, transaction, type SqlFragment, type SqlLike } from "@/utils/db";
 import { HISTORY_YEARS } from "@/utils/expenseRules";
 import {
   TITLE_SOURCES,
+  runExpenseChecks,
+  topFlagText,
   yearsBefore,
   type AccountTitle,
   type DuplicateHit,
+  type Flag,
   type ExpenseInput,
   type ExpensePaymentMethod,
   type ExpenseStatus,
   type NormalizedReceipt,
   type TitleSource,
 } from "@/utils/expenseClaims";
-import { formatDateShort, formatYen } from "@/utils/format";
 import { callGeminiJson, type AiResult } from "@/utils/gemini";
 import { todayJST } from "@/utils/jst";
 import { RECEIPT_INSTRUCTION, accountTitlesText, receiptSchema } from "@/utils/prompts/E-07";
 import { getFileBytes } from "@/utils/storage";
-import { completeTasksBySource, createTask } from "@/utils/tasks";
 
 export const EXPENSE_FEATURE_ID = "E-07";
-export const EXPENSE_APPROVE_TASK = "expense_approve";
-export const EXPENSE_RETURNED_TASK = "expense_returned";
 
 export const EXPENSES_URL = "/expenses";
 export const ADMIN_EXPENSES_URL = "/admin/expenses";
@@ -82,15 +81,9 @@ export type Expense = {
   accountTitleReason: string | null;
   checkFlags: string[];
   duplicateOf: string | null;
-  submittedAt: Date | null;
-  // 申請した日(日本時間)。承認のタスクをまとめる単位
-  submittedOn: string | null;
-  approvedAt: Date | null;
-  approvedByName: string | null;
-  approveNote: string | null;
-  returnedAt: Date | null;
-  returnedByName: string | null;
-  returnReason: string | null;
+  // 登録(確定)した日時と、その日(日本時間。CH-10 の期限の計算に使う)
+  confirmedAt: Date | null;
+  confirmedOn: string | null;
   createdAt: Date;
   // CH-18 画面を開いたときの updated_at(マイクロ秒の数の文字)
   version: string;
@@ -131,14 +124,8 @@ type ExpenseRow = {
   account_title_reason: string | null;
   check_flags: string[];
   duplicate_of: string | null;
-  submitted_at: Date | null;
-  submitted_on: string | null;
-  approved_at: Date | null;
-  approved_by_name: string | null;
-  approve_note: string | null;
-  returned_at: Date | null;
-  returned_by_name: string | null;
-  return_reason: string | null;
+  confirmed_at: Date | null;
+  confirmed_on: string | null;
   created_at: Date;
   version: string;
 };
@@ -150,18 +137,13 @@ const SELECT_EXPENSE = (sql: SqlLike, where: SqlFragment, tail: SqlFragment) => 
          e.total, e.total_10, e.tax_10, e.total_8, e.tax_8, e.total_exempt, e.payment_method, e.items_text, e.purpose, e.attendees,
          e.account_title_id, t.name as account_title_name, t.code as account_title_code, t.is_active as account_title_active,
          e.account_title_source, e.account_title_reason, e.check_flags, e.duplicate_of,
-         e.submitted_at, to_char(e.submitted_at at time zone 'Asia/Tokyo', 'YYYY-MM-DD') as submitted_on,
-         e.approved_at, case when av.id is null then null else av.last_name || ' ' || av.first_name end as approved_by_name,
-         e.approve_note, e.returned_at, case when rv.id is null then null else rv.last_name || ' ' || rv.first_name end as returned_by_name,
-         e.return_reason, e.created_at,
+         e.confirmed_at, to_char(e.confirmed_at at time zone 'Asia/Tokyo', 'YYYY-MM-DD') as confirmed_on, e.created_at,
          (extract(epoch from e.updated_at) * 1000000)::bigint::text as version
   from expenses e
   join employees ap on ap.id = e.applicant_id
   left join stored_files f on f.id = e.receipt_file_id and f.deleted_at is null
   left join account_titles t on t.id = e.account_title_id
   left join ai_requests ai on ai.id = e.ai_request_id
-  left join employees av on av.id = e.approved_by
-  left join employees rv on rv.id = e.returned_by
   where ${where}
   ${tail}`;
 
@@ -200,19 +182,13 @@ const toExpense = (r: ExpenseRow): Expense => ({
   accountTitleReason: r.account_title_reason,
   checkFlags: r.check_flags,
   duplicateOf: r.duplicate_of,
-  submittedAt: r.submitted_at,
-  submittedOn: r.submitted_on,
-  approvedAt: r.approved_at,
-  approvedByName: r.approved_by_name,
-  approveNote: r.approve_note,
-  returnedAt: r.returned_at,
-  returnedByName: r.returned_by_name,
-  returnReason: r.return_reason,
+  confirmedAt: r.confirmed_at,
+  confirmedOn: r.confirmed_on,
   createdAt: r.created_at,
   version: r.version,
 });
 
-// 1件を読む(G04・承認の操作)。無ければ null
+// 1件を読む(G04)。無ければ null
 export const getExpense = async (id: string): Promise<Expense | null> => {
   if (!isExpenseId(id)) return null;
   const [row] = await query((sql) => SELECT_EXPENSE(sql, sql`e.id = ${id}`, sql``));
@@ -228,27 +204,18 @@ export const getOwnExpense = async (id: string, applicantId: string): Promise<Ex
 
 // ---- EV-01 自分の経費の一覧 ----
 
-// 支払った日がその月のものと、月に関係なく差し戻し・下書きのもの。並び: 差し戻し → 下書き → そのほか(支払った日の新しい順)
+// 支払った日がその月の登録済みのものと、月に関係なく下書きのもの。並び: 下書き → 登録済み(支払った日の新しい順)
 export const listMyExpenses = async (applicantId: string, from: string, to: string): Promise<Expense[]> => {
   const rows = await query((sql) =>
     SELECT_EXPENSE(
       sql,
       sql`e.applicant_id = ${applicantId}
-          and (e.status in ('returned', 'draft') or e.spent_on between ${from} and ${to})`,
-      sql`order by case e.status when 'returned' then 0 when 'draft' then 1 else 2 end,
+          and (e.status = 'draft' or e.spent_on between ${from} and ${to})`,
+      sql`order by case e.status when 'draft' then 0 else 1 end,
                    e.spent_on desc nulls first, e.created_at desc`
     )
   );
   return rows.map(toExpense);
-};
-
-// ホームのタイルの件数(差し戻し)
-export const countMyReturned = async (applicantId: string): Promise<number> => {
-  const [row] = await query(
-    (sql) => sql<{ n: number }[]>`
-      select count(*)::int as n from expenses where applicant_id = ${applicantId} and status = 'returned'`
-  );
-  return row?.n ?? 0;
 };
 
 // ---- EV-02・EV-03 手順4 下書きを作る ----
@@ -312,7 +279,7 @@ export const readReceiptWithAi = async (
 
 export type TitleEstimate = { titleId: string; source: Exclude<TitleSource, "manual">; reason: string };
 
-// ① 同じ支払先の承認済みの経費(過去2年)でいちばん多い科目(同じ回数なら新しく承認された方。使わない科目は飛ばす)
+// ① 同じ支払先の登録済みの経費(過去2年)でいちばん多い科目(同じ回数なら新しく登録された方。使わない科目は飛ばす)
 // ② 履歴が無く、AIの案があればそれ ③ どちらも無ければ null
 export const estimateAccountTitle = async (
   payeeKey: string | null,
@@ -327,10 +294,10 @@ export const estimateAccountTitle = async (
         select e.account_title_id as id, t.name, count(*)::int as n
         from expenses e
         join account_titles t on t.id = e.account_title_id and t.is_active
-        where e.status = 'approved' and e.payee_key = ${payeeKey} and e.spent_on >= ${from}
+        where e.status = 'confirmed' and e.payee_key = ${payeeKey} and e.spent_on >= ${from}
           ${excludeId ? sql`and e.id <> ${excludeId}` : sql``}
         group by e.account_title_id, t.name
-        order by n desc, max(e.approved_at) desc
+        order by n desc, max(e.confirmed_at) desc
         limit 1`
     );
     if (top) return { titleId: top.id, source: "history", reason: `この支払先の過去の処理: ${top.name}（${top.n}回）` };
@@ -369,13 +336,13 @@ export const applyReceiptRead = async (
         ai_request_id = ${read.requestId}, ai_raw = ${sql.json(read.raw as Parameters<typeof sql.json>[0])},
         account_title_id = ${estimate?.titleId ?? null}, account_title_source = ${estimate?.source ?? null},
         account_title_reason = ${estimate?.reason ?? null}, updated_by = ${applicantId}
-      where id = ${expenseId} and applicant_id = ${applicantId} and status in ('draft', 'returned')`
+      where id = ${expenseId} and applicant_id = ${applicantId} and status = 'draft'`
   );
 };
 
 // ---- CH-09 二重計上の疑い ----
 
-// 取り下げ以外のほかの経費(ほかの人の申請も含む)で、① 同じ画像 ② 同じ支払先・日付・合計 ③ 同じ日付・合計で支払先の名前が似ている
+// ほかの経費(下書き・ほかの人の経費も含む)で、① 同じ画像 ② 同じ支払先・日付・合計 ③ 同じ日付・合計で支払先の名前が似ている
 export const findDuplicate = async (e: {
   id: string;
   receiptFileId: string | null;
@@ -401,25 +368,25 @@ export const findDuplicate = async (e: {
       from expenses e
       join employees ap on ap.id = e.applicant_id
       left join stored_files f on f.id = e.receipt_file_id
-      where e.id <> ${e.id} and e.status <> 'withdrawn' and (${any})
+      where e.id <> ${e.id} and (${any})
       order by e.created_at limit 1`;
   });
   const [hit] = rows;
   return hit ? { id: hit.id, applicantName: hit.last_name, spentOn: hit.spent_on, total: hit.total } : null;
 };
 
-// ---- EV-07・EV-08 保存・申請(CH-18 ほかの人の更新を見る) ----
+// ---- EV-07・EV-08 保存・登録(CH-18 ほかの画面の更新を見る) ----
 
 export type WriteTitle = { id: string | null; source: TitleSource | null; reason: string | null };
 
-// 本人の、下書き・差し戻しの経費を書き換える。submit を渡すと承認待ちにする。更新できなければ false(CH-18・状態)
+// 本人の下書きを書き換える。confirm を渡すと登録済み(確定)にする。更新できなければ false(CH-18・状態)
 export const writeExpense = async (
   id: string,
   applicantId: string,
   version: string,
   input: ExpenseInput & { payeeKey: string | null },
   title: WriteTitle,
-  submit: { flags: string[]; duplicateOf: string | null } | null
+  confirm: { flags: string[]; duplicateOf: string | null } | null
 ): Promise<boolean> => {
   const rows = await query(
     (sql) => sql<{ id: string }[]>`
@@ -432,19 +399,19 @@ export const writeExpense = async (
         no_receipt_reason = ${input.noReceiptReason},
         account_title_id = ${title.id}, account_title_source = ${title.source}, account_title_reason = ${title.reason},
         ${
-          submit
-            ? sql`status = 'submitted', submitted_at = now(), check_flags = ${submit.flags}::text[], duplicate_of = ${submit.duplicateOf},`
+          confirm
+            ? sql`status = 'confirmed', confirmed_at = now(), check_flags = ${confirm.flags}::text[], duplicate_of = ${confirm.duplicateOf},`
             : sql``
         }
         updated_by = ${applicantId}
-      where id = ${id} and applicant_id = ${applicantId} and status in ('draft', 'returned')
+      where id = ${id} and applicant_id = ${applicantId} and status = 'draft'
         and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
       returning id`
   );
   return rows.length > 0;
 };
 
-// CH-18 だけを見る(撮り直す・取り下げ・削除の前)
+// CH-18 だけを見る(削除の前)
 export const isCurrentVersion = async (id: string, version: string): Promise<boolean> => {
   const [row] = await query(
     (sql) => sql<{ ok: boolean }[]>`
@@ -459,253 +426,87 @@ export const replaceReceipt = async (id: string, applicantId: string, version: s
   const rows = await query(
     (sql) => sql<{ id: string }[]>`
       update expenses set receipt_file_id = ${fileId}, no_receipt_reason = null, updated_by = ${applicantId}
-      where id = ${id} and applicant_id = ${applicantId} and status in ('draft', 'returned')
+      where id = ${id} and applicant_id = ${applicantId} and status = 'draft'
         and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
       returning id`
   );
   return rows.length > 0;
 };
 
-// ---- EV-09 取り下げ ----
-
-// 承認待ち → 下書き(取り下げて直す)。申請した日時は残す(承認のタスクをまとめ直すため・一度申請したものは削除できない)
-export const withdrawToDraft = async (id: string, applicantId: string, version: string): Promise<boolean> => {
-  const rows = await query(
-    (sql) => sql<{ id: string }[]>`
-      update expenses set status = 'draft', updated_by = ${applicantId}
-      where id = ${id} and applicant_id = ${applicantId} and status = 'submitted'
-        and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
-      returning id`
-  );
-  return rows.length > 0;
-};
-
-// 差し戻し → 取り下げ(記録は残す)
-export const withdrawReturned = async (id: string, applicantId: string, version: string): Promise<boolean> => {
-  const rows = await query(
-    (sql) => sql<{ id: string }[]>`
-      update expenses set status = 'withdrawn', updated_by = ${applicantId}
-      where id = ${id} and applicant_id = ${applicantId} and status = 'returned'
-        and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
-      returning id`
-  );
-  if (rows.length === 0) return false;
-  await completeTasksBySource(EXPENSE_FEATURE_ID, id, { types: [EXPENSE_RETURNED_TASK], note: "申請を取り下げた" });
-  return true;
-};
-
-// ---- EV-10 下書きの削除(一度も申請していないものだけ)。消した経費の領収書の画像のIDを返す ----
+// ---- EV-10 下書きの削除。消した経費の領収書の画像のIDを返す ----
 
 export const deleteDraft = async (id: string, applicantId: string, version: string): Promise<{ ok: boolean; fileIds: string[] }> =>
   transaction(async (tx) => {
     const [row] = await tx<{ receipt_file_id: string | null }[]>`
       delete from expenses
-      where id = ${id} and applicant_id = ${applicantId} and status = 'draft' and submitted_at is null
+      where id = ${id} and applicant_id = ${applicantId} and status = 'draft'
         and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
       returning receipt_file_id`;
     if (!row) return { ok: false, fileIds: [] };
     return { ok: true, fileIds: row.receipt_file_id ? [row.receipt_file_id] : [] };
   });
 
-// ---- 0.4 承認のタスク(同じ日の申請は1つのタスクにまとめる。【仮】E-07-仮-16) ----
+// ---- EV-11 全員の経費の一覧(G03) ----
 
-const approveTaskSourceId = (day: string) => `submitted:${day}`;
-
-// その日に申請された承認待ちの経費で、タスクを作り直す。1件も無ければ完了にする(承認・差し戻し・取り下げのあと)。
-// タスクの失敗は申請・承認の失敗にしない(ログに残す。EV-08 手順6)
-export const syncApproveTask = async (day: string | null): Promise<void> => {
-  if (!day) return;
-  try {
-    const rows = await query(
-      (sql) => sql<{ last_name: string; total: number; payee_name: string | null }[]>`
-        select ap.last_name, e.total, e.payee_name
-        from expenses e join employees ap on ap.id = e.applicant_id
-        where e.status = 'submitted' and to_char(e.submitted_at at time zone 'Asia/Tokyo', 'YYYY-MM-DD') = ${day}
-        order by e.submitted_at`
-    );
-    const sourceId = approveTaskSourceId(day);
-    if (rows.length === 0) {
-      await completeTasksBySource(EXPENSE_FEATURE_ID, sourceId, { types: [EXPENSE_APPROVE_TASK] });
-      return;
-    }
-    const line = (r: (typeof rows)[number]) => `${r.last_name} ${formatYen(r.total)}（${r.payee_name ?? "支払先なし"}）`;
-    const sum = rows.reduce((s, r) => s + r.total, 0);
-    await createTask({
-      type: EXPENSE_APPROVE_TASK,
-      title:
-        rows.length === 1
-          ? `経費の承認: ${line(rows[0])}`
-          : `経費の承認: ${rows.length}件 ${formatYen(sum)}（${formatDateShort(day)}の申請）`,
-      body: rows.map((r) => `・${line(r)}`).join("\n"),
-      assigneeFeatureKey: "expenses_approve",
-      sourceFeature: EXPENSE_FEATURE_ID,
-      sourceId,
-      linkUrl: ADMIN_EXPENSES_URL,
-    });
-  } catch (e) {
-    console.error("経費の承認のタスクを更新できませんでした:", e instanceof Error ? e.message : e);
-  }
-};
-
-// 申請し直したら差し戻しのタスクを完了にする
-export const completeReturnedTask = async (id: string): Promise<void> => {
-  try {
-    await completeTasksBySource(EXPENSE_FEATURE_ID, id, { types: [EXPENSE_RETURNED_TASK], note: "申請し直した" });
-  } catch (e) {
-    console.error("経費の差し戻しのタスクを完了にできませんでした:", e instanceof Error ? e.message : e);
-  }
-};
-
-// ---- EV-11 承認の一覧 ----
-
-export type AdminExpenseTab = "needs_check" | "ok" | "returned" | "approved" | "all";
-export type AdminExpenseFilter = { tab: AdminExpenseTab; from: string; to: string; applicantId: string; titleId: string };
-
-// 承認待ちのタブは月に関係なく全部、ほかは支払った日がその月のもの。下書きは本人だけが見えるので出さない
-const adminTabWhere = (sql: SqlLike, f: Pick<AdminExpenseFilter, "tab" | "from" | "to">) => {
-  const inMonth = sql`e.spent_on between ${f.from} and ${f.to}`;
-  switch (f.tab) {
-    case "needs_check":
-      return sql`e.status = 'submitted' and cardinality(e.check_flags) > 0`;
-    case "ok":
-      return sql`e.status = 'submitted' and cardinality(e.check_flags) = 0`;
-    case "returned":
-      return sql`e.status = 'returned' and ${inMonth}`;
-    case "approved":
-      return sql`e.status = 'approved' and ${inMonth}`;
-    default:
-      return sql`e.status <> 'draft' and ${inMonth}`;
-  }
-};
+// 登録済みで、支払った日がその月のもの(下書きは本人だけが見えるので出さない)。needsCheck: 印のあるものだけ
+export type AdminExpenseFilter = { from: string; to: string; applicantId: string; titleId: string; needsCheck: boolean };
 
 export const listAdminExpenses = async (f: AdminExpenseFilter): Promise<Expense[]> => {
   const rows = await query((sql) =>
     SELECT_EXPENSE(
       sql,
-      sql`${adminTabWhere(sql, f)}
+      sql`e.status = 'confirmed' and e.spent_on between ${f.from} and ${f.to}
           ${f.applicantId ? sql`and e.applicant_id = ${f.applicantId}` : sql``}
-          ${f.titleId ? sql`and e.account_title_id = ${f.titleId}` : sql``}`,
-      f.tab === "needs_check" || f.tab === "ok"
-        ? sql`order by e.submitted_at asc`
-        : sql`order by e.spent_on desc, e.submitted_at desc nulls last`
+          ${f.titleId ? sql`and e.account_title_id = ${f.titleId}` : sql``}
+          ${f.needsCheck ? sql`and cardinality(e.check_flags) > 0` : sql``}`,
+      sql`order by e.spent_on desc, e.confirmed_at desc`
     )
   );
   return rows.map(toExpense);
 };
 
-// タブの件数(承認待ちは全部、差し戻し中はその月)
-export const countAdminTabs = async (from: string, to: string): Promise<{ needs_check: number; ok: number; returned: number }> => {
-  const [row] = await query(
-    (sql) => sql<{ needs_check: number; ok: number; returned: number }[]>`
-      select
-        count(*) filter (where status = 'submitted' and cardinality(check_flags) > 0)::int as needs_check,
-        count(*) filter (where status = 'submitted' and cardinality(check_flags) = 0)::int as ok,
-        count(*) filter (where status = 'returned' and spent_on between ${from} and ${to})::int as returned
-      from expenses`
-  );
-  return row;
-};
-
-// 左メニューの件数(承認待ち)
-export const countSubmittedExpenses = async (): Promise<number> => {
-  const [row] = await query((sql) => sql<{ n: number }[]>`select count(*)::int as n from expenses where status = 'submitted'`);
-  return row?.n ?? 0;
-};
-
-// 絞り込みの「申請者」(経費を出したことのある人)
+// 絞り込みの「登録した人」(経費を登録したことのある人)
 export const listExpenseApplicants = async (): Promise<{ id: string; name: string }[]> => {
   const rows = await query(
     (sql) => sql<{ id: string; last_name: string; first_name: string }[]>`
       select distinct ap.id, ap.last_name, ap.first_name, ap.employee_code
       from expenses e join employees ap on ap.id = e.applicant_id
-      where e.status <> 'draft'
+      where e.status = 'confirmed'
       order by ap.employee_code`
   );
   return rows.map((r) => ({ id: r.id, name: `${r.last_name} ${r.first_name}` }));
 };
 
-// ---- EV-13 承認・EV-14 まとめて承認・EV-15 差し戻し ----
+// ---- EV-18 CSV(登録済み・支払った日がその月) ----
 
-export const approveExpense = async (
-  id: string,
-  version: string,
-  title: { id: string; changed: boolean },
-  note: string | null,
-  by: string
-): Promise<boolean> => {
-  const rows = await query(
-    (sql) => sql<{ id: string }[]>`
-      update expenses set
-        status = 'approved', approved_by = ${by}, approved_at = now(), approve_note = ${note},
-        account_title_id = ${title.id},
-        ${title.changed ? sql`account_title_source = 'manual', account_title_reason = null,` : sql``}
-        updated_by = ${by}
-      where id = ${id} and status = 'submitted'
-        and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
-      returning id`
-  );
-  return rows.length > 0;
-};
-
-// 1つのトランザクションでまとめて承認する。1件でも更新できなければ全部やめて false(CH-14・CH-18)
-export const approveExpensesBulk = async (items: { id: string; version: string }[], by: string): Promise<boolean> => {
-  class Rollback extends Error {}
-  try {
-    await transaction(async (tx) => {
-      for (const item of items) {
-        const rows = await tx<{ id: string }[]>`
-          update expenses e set status = 'approved', approved_by = ${by}, approved_at = now(), updated_by = ${by}
-          where e.id = ${item.id} and e.status = 'submitted' and cardinality(e.check_flags) = 0
-            and exists (select 1 from account_titles t where t.id = e.account_title_id and t.is_active)
-            and (extract(epoch from e.updated_at) * 1000000)::bigint::text = ${item.version}
-          returning e.id`;
-        if (rows.length === 0) throw new Rollback();
-      }
-    });
-    return true;
-  } catch (e) {
-    if (e instanceof Rollback) return false;
-    throw e;
-  }
-};
-
-export const returnExpense = async (id: string, version: string, reason: string, by: string): Promise<boolean> => {
-  const rows = await query(
-    (sql) => sql<{ id: string }[]>`
-      update expenses set status = 'returned', returned_by = ${by}, returned_at = now(), return_reason = ${reason}, updated_by = ${by}
-      where id = ${id} and status = 'submitted'
-        and (extract(epoch from updated_at) * 1000000)::bigint::text = ${version}
-      returning id`
-  );
-  return rows.length > 0;
-};
-
-// 0.4 差し戻したら本人にタスクを出す(朝のまとめで LINE に届く)
-export const issueReturnedTask = async (e: Expense, reason: string): Promise<void> => {
-  try {
-    await createTask({
-      type: EXPENSE_RETURNED_TASK,
-      title: `経費が差し戻されました: ${e.spentOn ? `${formatDateShort(e.spentOn)} ` : ""}${e.payeeName ?? ""}`.trim(),
-      body: `理由: ${reason}`,
-      assigneeEmployeeId: e.applicantId,
-      sourceFeature: EXPENSE_FEATURE_ID,
-      sourceId: e.id,
-      linkUrl: expenseUrl(e.id),
-    });
-  } catch (err) {
-    console.error("経費の差し戻しのタスクを出せませんでした:", err instanceof Error ? err.message : err);
-  }
-};
-
-// ---- EV-18 CSV(承認済み・支払った日がその月) ----
-
-export const listApprovedForCsv = async (from: string, to: string): Promise<Expense[]> => {
+export const listConfirmedForCsv = async (from: string, to: string): Promise<Expense[]> => {
   const rows = await query((sql) =>
     SELECT_EXPENSE(
       sql,
-      sql`e.status = 'approved' and e.spent_on between ${from} and ${to}`,
-      sql`order by e.spent_on, ap.employee_code, e.approved_at`
+      sql`e.status = 'confirmed' and e.spent_on between ${from} and ${to}`,
+      sql`order by e.spent_on, ap.employee_code, e.confirmed_at`
     )
   );
   return rows.map(toExpense);
+};
+
+// ---- 確認が必要な点(G02 の①③・G04。03 EV-04 手順3・EV-12 手順2) ----
+
+// 下書き: 今の内容で 0.3 の印を計算する(保存はしない)。登録済み: 保存した印(check_flags)の文だけを、今の内容で作り直して出す。
+// 登録したときに付いた印で、今は計算に出ないもの(相手の下書きが消えた など)も残す。二重計上の疑いの相手も返す
+export const expenseFlagsForDisplay = async (e: Expense): Promise<{ flags: Flag[]; duplicate: DuplicateHit | null }> => {
+  const duplicate = await findDuplicate({
+    id: e.id,
+    receiptFileId: e.receiptFileId,
+    payeeKey: e.payeeKey,
+    spentOn: e.spentOn,
+    total: e.total,
+  });
+  const recomputed = runExpenseChecks({ ...e, titleName: e.accountTitleName }, e.confirmedOn ?? todayJST(), duplicate);
+  if (e.status === "draft") return { flags: recomputed, duplicate };
+  const flags = recomputed.filter((f) => e.checkFlags.includes(f.code));
+  for (const code of e.checkFlags)
+    if (!flags.some((f) => f.code === code))
+      flags.push({ code: code as Flag["code"], message: `${topFlagText([code], e) ?? code}（登録のときの印）` });
+  return { flags, duplicate };
 };

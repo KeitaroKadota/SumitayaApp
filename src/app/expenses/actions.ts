@@ -1,6 +1,7 @@
 "use server";
 
-// 経費の申請の操作(E-07 03 EV-02・EV-03・EV-05・EV-07〜EV-10)。機能キー expenses_apply(全員)。本人の経費だけ(CH-02)。
+// 経費の撮影・登録の操作(E-07 03 EV-02・EV-03・EV-05・EV-07・EV-08・EV-10)。機能キー expenses_apply(全員)。本人の経費だけ(CH-02)。
+// 0.4 で承認の段階をなくした。「登録する」で確定し、あとから直せない(01 4.1)。タスクは出さない(03 の 0.4)。
 // 操作はエラーを投げずに画面へ文で返す(入力のある操作は FormState、ボタンだけの操作は ?error= で G02 に戻す)。
 // みるきーの src/app/expenses/actions.ts の作り(エラーを返す形、書く直前に読み直す、updated_at による衝突の確認)を流用した。
 // AIは読み取りと勘定科目の案だけ。検算・二重計上・規程の確認は expenseClaims.ts の計算で行う。
@@ -9,6 +10,7 @@ import { redirect } from "next/navigation";
 import { requireAccess, type CurrentEmployee } from "@/utils/auth";
 import {
   amountsFromReceipt,
+  confirmTitleErrors,
   flagCodesOf,
   normalizeAiReceipt,
   parseExpenseForm,
@@ -19,7 +21,6 @@ import {
 import {
   EXPENSES_URL,
   applyReceiptRead,
-  completeReturnedTask,
   deleteDraft,
   estimateAccountTitle,
   expenseUrl,
@@ -31,9 +32,6 @@ import {
   listAccountTitles,
   readReceiptWithAi,
   replaceReceipt,
-  syncApproveTask,
-  withdrawReturned,
-  withdrawToDraft,
   writeExpense,
   type WriteTitle,
 } from "@/utils/expenseClaimsServer";
@@ -44,7 +42,7 @@ import { formText } from "@/utils/textNormalize";
 import { aiFailCode } from "./expensesView";
 
 const SAVE_FAILED = "保存できませんでした。時間をおいてもう一度お試しください。";
-const CONFLICT = "この経費はほかの人が更新しました。画面を開き直してください。";
+const CONFLICT = "この経費はほかの画面で更新されました。画面を開き直してください。";
 const NOT_FOUND = "この経費は見つかりません。";
 const FILE_UNUSABLE = "この写真は使えません。もう一度撮影してください。";
 
@@ -93,7 +91,7 @@ export async function createExpenseFromReceipt(_prev: FormState, formData: FormD
   const fileId = formText(formData, "file_id");
   if (!fileId || !(await isReceiptFileUsable(fileId, me.id))) return { errors: {}, formError: FILE_UNUSABLE, values };
 
-  // 手順4: 下書きを作る(申請者＝自分、支払い方の初期値＝現金)
+  // 手順4: 下書きを作る(登録した人＝自分、支払い方の初期値＝現金)
   let id: string;
   try {
     id = await insertDraft({ applicantId: me.id, receiptFileId: fileId });
@@ -134,8 +132,8 @@ export async function retakeReceipt(id: string, _prev: FormState, formData: Form
   const values = formValues(formData);
   const expense = await getOwnExpense(id, me.id);
   if (!expense) return { errors: {}, formError: NOT_FOUND, values };
-  // 手順1: 下書き・差し戻しのときだけ
-  if (expense.status !== "draft" && expense.status !== "returned")
+  // 手順1: 下書きのときだけ
+  if (expense.status !== "draft")
     return { errors: {}, formError: "この経費は撮り直せません。画面を開き直してください。", values };
   const fileId = formText(formData, "file_id");
   if (!fileId || !(await isReceiptFileUsable(fileId, me.id))) return { errors: {}, formError: FILE_UNUSABLE, values };
@@ -154,21 +152,21 @@ export async function retakeReceipt(id: string, _prev: FormState, formData: Form
   redirect(`${expenseUrl(expense.id)}${aiFail ? `?ai=${aiFail}` : "?done=reread"}`);
 }
 
-// ---- EV-07 「下書きを保存する」・EV-08 「申請する」「直して申請する」(intent = save・submit) ----
+// ---- EV-07 「下書きを保存する」・EV-08 「登録する」(intent = save・confirm) ----
 
 export async function saveExpense(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
   const me = await requireAccess("expenses_apply", expenseUrl(id));
   const values = formValues(formData);
-  const mode = formData.get("intent") === "submit" ? "submit" : "draft";
+  const mode = formData.get("intent") === "confirm" ? "confirm" : "draft";
 
-  // 手順1: CH-02、状態が下書き・差し戻し、CH-17
+  // 手順1: CH-02、状態が下書き、CH-17
   const expense = await getOwnExpense(id, me.id);
   if (!expense) return { errors: {}, formError: NOT_FOUND, values };
-  if (expense.status !== "draft" && expense.status !== "returned")
-    return { errors: {}, formError: "この経費は直せません。画面を開き直してください。", values };
+  if (expense.status !== "draft")
+    return { errors: {}, formError: "登録済みの経費は直せません。画面を開き直してください。", values };
   const titles = await listAccountTitles();
   const today = todayJST();
-  // 手順2: CH-04〜CH-08・CH-11 の1(申請のときだけ止める)
+  // 手順2: CH-04〜CH-08・CH-11 の1(登録のときだけ止める)
   const parsed = parseExpenseForm(values, mode, {
     today,
     hasReceipt: expense.receiptFileId !== null,
@@ -186,9 +184,9 @@ export async function saveExpense(id: string, _prev: FormState, formData: FormDa
         ? { id: input.accountTitleId, source: "manual", reason: null }
         : { id: null, source: null, reason: null };
 
-  let submit: { flags: string[]; duplicateOf: string | null } | null = null;
+  let confirm: { flags: string[]; duplicateOf: string | null } | null = null;
   try {
-    if (mode === "submit") {
+    if (mode === "confirm") {
       // 手順3: 勘定科目が空なら、もう一度推定する(AIの案は読み取りのときのもの)
       if (!title.id) {
         const ai = expense.aiRaw
@@ -205,6 +203,12 @@ export async function saveExpense(id: string, _prev: FormState, formData: FormDa
         );
         if (estimate) title = { id: estimate.titleId, source: estimate.source, reason: estimate.reason };
       }
+      // 手順2 の続き: 勘定科目は必須(推定できなければエラー)。推定した科目が交際費・会議費なら相手先・人数も確かめる(CH-04・CH-11 の1)
+      const titleErrors = confirmTitleErrors(
+        titles.find((t) => t.id === title.id),
+        input.attendees
+      );
+      if (Object.keys(titleErrors).length > 0) return { errors: titleErrors, formError: errorSummary(titleErrors), values };
       // 手順4: 0.3 チェックの印
       const duplicate = await findDuplicate({
         id: expense.id,
@@ -215,57 +219,26 @@ export async function saveExpense(id: string, _prev: FormState, formData: FormDa
       });
       const titleName = titles.find((t) => t.id === title.id)?.name ?? null;
       const flags = runExpenseChecks({ ...input, titleName }, today, duplicate);
-      submit = { flags: flagCodesOf(flags), duplicateOf: duplicate?.id ?? null };
+      confirm = { flags: flagCodesOf(flags), duplicateOf: duplicate?.id ?? null };
     }
   } catch (e) {
     console.error("経費を確かめられませんでした:", e instanceof Error ? e.message : e);
     return { errors: {}, formError: SAVE_FAILED, values };
   }
 
-  // 手順5: CH-18 を見て書く(差し戻しの理由は経緯として残す)
+  // 手順5: CH-18 を見て書く(登録なら status = confirmed・confirmed_at = 今。あとから直せない)
   let ok = false;
   try {
-    ok = await writeExpense(expense.id, me.id, formText(formData, "version"), input, title, submit);
+    ok = await writeExpense(expense.id, me.id, formText(formData, "version"), input, title, confirm);
   } catch (e) {
     console.error("経費を保存できませんでした:", e instanceof Error ? e.message : e);
     return { errors: {}, formError: SAVE_FAILED, values };
   }
   if (!ok) return { errors: {}, formError: CONFLICT, values };
 
-  // 手順6: 承認者にタスクを出し、差し戻しのタスクを完了にする(失敗しても申請は確定)
-  if (submit) {
-    const fresh = await getOwnExpense(expense.id, me.id).catch(() => null);
-    await syncApproveTask(fresh?.submittedOn ?? today);
-    if (expense.status === "returned") await completeReturnedTask(expense.id);
-  }
-
-  // 手順7
+  // 手順6
   refresh(expense.id);
-  redirect(`${EXPENSES_URL}?done=${submit ? "submitted" : "saved"}`);
-}
-
-// ---- EV-09 「取り下げて直す」(承認待ち → 下書き)・「この申請を取り下げる」(差し戻し → 取り下げ) ----
-
-export async function withdrawExpense(id: string, formData: FormData): Promise<void> {
-  const me = await requireAccess("expenses_apply", expenseUrl(id));
-  const expense = await getOwnExpense(id, me.id);
-  if (!expense) redirect(`${EXPENSES_URL}?error=not_found`);
-  const version = formText(formData, "version");
-  const toDraft = formData.get("intent") === "to_draft";
-  if (toDraft ? expense.status !== "submitted" : expense.status !== "returned") redirect(`${expenseUrl(expense.id)}?error=status`);
-
-  let ok = false;
-  try {
-    ok = toDraft ? await withdrawToDraft(expense.id, me.id, version) : await withdrawReturned(expense.id, me.id, version);
-  } catch (e) {
-    console.error("経費を取り下げられませんでした:", e instanceof Error ? e.message : e);
-    redirect(`${expenseUrl(expense.id)}?error=failed`);
-  }
-  if (!ok) redirect(`${expenseUrl(expense.id)}?error=conflict`);
-  // 承認待ちから戻したときは、承認者のタスクをまとめ直す(残りが無ければ完了)
-  if (toDraft) await syncApproveTask(expense.submittedOn);
-  refresh(expense.id);
-  redirect(toDraft ? `${expenseUrl(expense.id)}?done=to_draft` : `${EXPENSES_URL}?done=withdrawn`);
+  redirect(`${EXPENSES_URL}?done=${confirm ? "confirmed" : "saved"}`);
 }
 
 // ---- EV-10 「この下書きを削除する」 ----
@@ -274,8 +247,8 @@ export async function deleteExpenseDraft(id: string, formData: FormData): Promis
   const me = await requireAccess("expenses_apply", expenseUrl(id));
   const expense = await getOwnExpense(id, me.id);
   if (!expense) redirect(`${EXPENSES_URL}?error=not_found`);
-  // 手順2: 下書きで、一度も申請していないものだけ
-  if (expense.status !== "draft" || expense.submittedAt) redirect(`${expenseUrl(expense.id)}?error=status`);
+  // 手順2: 下書きのときだけ
+  if (expense.status !== "draft") redirect(`${expenseUrl(expense.id)}?error=status`);
   if (!(await isCurrentVersion(expense.id, formText(formData, "version")))) redirect(`${expenseUrl(expense.id)}?error=conflict`);
 
   let result: { ok: boolean; fileIds: string[] } = { ok: false, fileIds: [] };

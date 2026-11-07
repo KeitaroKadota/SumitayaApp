@@ -2,13 +2,10 @@
 import type { BadgeTone } from "@/components/Badge";
 import type { ExpenseStatus } from "@/utils/expenseClaims";
 
-// 状態の Badge(02 G01: 下書き・承認待ち・取り下げ＝neutral、差し戻し＝danger、承認済み＝success)
+// 状態の Badge(02 G01: 下書き＝neutral、登録済み＝success)
 export const EXPENSE_STATUS_TONES: Record<ExpenseStatus, BadgeTone> = {
   draft: "neutral",
-  submitted: "neutral",
-  returned: "danger",
-  approved: "success",
-  withdrawn: "neutral",
+  confirmed: "success",
 };
 
 export const isMonthStr = (v: string): boolean => /^\d{4}-(0[1-9]|1[0-2])$/.test(v);

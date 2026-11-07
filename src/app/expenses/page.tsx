@@ -18,10 +18,9 @@ import { EXPENSE_STATUS_TONES, isMonthStr, monthRange, shiftMonth } from "./expe
 const str = (v: string | string[] | undefined): string => (typeof v === "string" ? v.trim() : "");
 
 const DONE_MESSAGES: Record<string, string> = {
-  submitted: "申請しました。",
+  confirmed: "登録しました。",
   saved: "下書きを保存しました。",
   deleted: "削除しました。",
-  withdrawn: "取り下げました。",
 };
 const ERROR_MESSAGES: Record<string, string> = {
   not_found: "この経費は見つかりません。",
@@ -87,8 +86,10 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
                 >
                   <span className="flex flex-wrap gap-2">
                     <Badge tone={EXPENSE_STATUS_TONES[e.status]}>{EXPENSE_STATUSES[e.status]}</Badge>
-                    {/* 一度も申請していない、AIが読み取った下書き */}
-                    {e.status === "draft" && e.aiRequestId && !e.submittedAt && <AiBadge />}
+                    {/* AIが読み取った下書き */}
+                    {e.status === "draft" && e.aiRequestId && <AiBadge />}
+                    {/* 印があれば「要確認」(02 G01) */}
+                    {e.status === "confirmed" && e.checkFlags.length > 0 && <Badge tone="warning">⚠要確認</Badge>}
                   </span>
                   <span className="font-bold break-words">
                     {e.spentOn ? formatDateShort(e.spentOn) : "日付なし"} {e.payeeName ?? "支払先なし"}
@@ -97,9 +98,6 @@ export default async function ExpensesPage({ searchParams }: PageProps<"/expense
                     <span className="text-sm tabular-nums">
                       {formatYen(e.total, "included")} {e.accountTitleName ?? ""}
                     </span>
-                  )}
-                  {e.status === "returned" && e.returnReason && (
-                    <span className="text-sm break-words text-danger">理由: {e.returnReason}</span>
                   )}
                 </Link>
               </li>

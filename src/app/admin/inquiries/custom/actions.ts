@@ -70,6 +70,7 @@ const extractedOf = (m: ThreadMessage) => ({ customSpec: m.extracted?.custom_spe
 
 const EMPTY_SPEC: QuoteSpec = {
   itemType: null,
+  designNote: null,
   fabricItemId: null,
   fabricNote: null,
   sizeBreakdown: null,
@@ -93,6 +94,7 @@ const applyCandidates = (
     if (c.changed) continue;
     if (c.field === "organization_name") org = c.value;
     else if (c.field === "item_type") s.itemType = c.value;
+    else if (c.field === "design_note") s.designNote = c.value;
     else if (c.field === "fabric_item_id") s.fabricItemId = c.value;
     else if (c.field === "fabric_note") s.fabricNote = c.value;
     else if (c.field === "print_item_id") s.printItemId = c.value;

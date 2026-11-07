@@ -6,7 +6,7 @@ import { canAccess, type FeatureKey, type Role } from "@/utils/permissions";
 
 // feature を並びで書いたときは、どれか1つでも使えれば出す(B-01 の在庫の一覧は orders か inventory)
 // badge: 件数のバッジを出す項目(数は layout が求めて渡す。00_画面共通ルール 5.2)
-export type AdminMenuBadge = "payables_review" | "deposits_unmatched" | "expenses_submitted";
+export type AdminMenuBadge = "payables_review" | "deposits_unmatched";
 export type AdminMenuItem = {
   group: AdminMenuGroup;
   href: string;
@@ -60,8 +60,8 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { group: "勤怠・給与", href: "/admin/attendance/alerts", label: "勤怠の異常", feature: "attendance_admin" },
   // E-03 給与CSVの出力(02 の G01)
   { group: "勤怠・給与", href: "/admin/payroll", label: "給与CSV", feature: "payroll" },
-  // E-07 経費精算(02 の画面一覧。「経費 ＞ 承認」には承認待ちの件数を出す)
-  { group: "経費", href: "/admin/expenses", label: "承認", feature: "expenses_admin", badge: "expenses_submitted" },
+  // E-07 経費精算(02 の画面一覧。「経費 ＞ 一覧」。0.4 で承認待ちの件数は外した)
+  { group: "経費", href: "/admin/expenses", label: "一覧", feature: "expenses_admin" },
   // CMN-02 マスタ管理(02 の画面一覧)
   { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" },
   { group: "マスタ", href: "/admin/products", label: "商品", feature: "products" },

@@ -141,8 +141,10 @@ export type ExtractedProduct = {
   quantity: number | null;
 };
 
+// D-01 01 6.3 の custom_spec。デザイン(design)は D-04 0.4 で足した(必ず聞く項目。No.24)
 export const CUSTOM_SPEC_FIELDS = {
   item: "品目",
+  design: "デザイン",
   fabric: "生地",
   size_and_quantity: "サイズと枚数",
   name_print: "名入れの内容",

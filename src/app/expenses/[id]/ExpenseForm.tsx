@@ -1,9 +1,9 @@
 "use client";
 
-// E-07 G02 経費の申請のフォーム(02 G02 の①〜③、03 EV-06〜EV-08)。
+// E-07 G02 経費の登録のフォーム(02 G02 の①・②、03 EV-06〜EV-08)。
 // 欄の値は画面で持つ(エラーのときも入力を消さないため。E-04 の ReviewForm と同じ)。
-// 読み取りの結果は AiDraft で囲み、本人が「申請する」を押した時点で確認済みとする(02 G02)。
-// 合計と内訳の検算(CH-05)は画面でも出すが、申請を止めるかはサーバーで計算し直して決める。
+// 読み取りの結果は AiDraft で囲み、本人が「登録する」を押した時点で確認済みとする(02 G02)。
+// 合計と内訳の検算(CH-05)は画面でも出すが、登録を止めるかはサーバーで計算し直して決める。登録すると確定し、あとから直せない。
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { AiBadge, AiDraft } from "@/components/AiDraft";
@@ -63,7 +63,6 @@ export function ExpenseForm({
   aiRead,
   aiFlags,
   hasReceipt,
-  returned,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   initialValues: Record<string, string>;
@@ -76,8 +75,6 @@ export function ExpenseForm({
   // ⚠ 要確認の項目(AIが読めなかった・形を直した。CH-19)
   aiFlags: string[];
   hasReceipt: boolean;
-  // 差し戻しからの申請し直し(③)
-  returned: boolean;
 }) {
   const [state, formAction] = useActionState(action, { errors: {}, formError: null, values: initialValues });
   const [vals, setVals] = useState<Record<string, string>>(initialValues);
@@ -156,7 +153,7 @@ export function ExpenseForm({
         {amountPair("8％対象（軽減税率）", "total_8", "tax_8")}
         {amountPair("対象外（切手・印紙など）", "total_exempt", null)}
         {mismatch && <p className="text-sm font-bold text-warning">⚠ 要確認: 内訳の合計が合計と合いません</p>}
-        {breakdownEmpty && (total ?? 0) > 0 && <p className="text-sm text-ink-muted">内訳を10％として申請します。</p>}
+        {breakdownEmpty && (total ?? 0) > 0 && <p className="text-sm text-ink-muted">内訳を10％として登録します。</p>}
         {e.breakdown && <p className="text-sm text-danger">⚠ {e.breakdown}</p>}
         <p className="text-sm text-ink-muted">消費税が空のときは、金額から計算して入れます。</p>
       </fieldset>
@@ -214,7 +211,7 @@ export function ExpenseForm({
           onChange={(v) => set("payment_method", v)}
           error={e.payment_method}
         />
-        <Field id="x_account_title_id" label="勘定科目" error={e.account_title_id}>
+        <Field id="x_account_title_id" label="勘定科目" required error={e.account_title_id}>
           <Select
             id="x_account_title_id"
             name="account_title_id"
@@ -222,7 +219,7 @@ export function ExpenseForm({
             onChange={(ev) => set("account_title_id", ev.currentTarget.value)}
             invalid={!!e.account_title_id}
           >
-            <option value="">分からない（承認者が選ぶ）</option>
+            <option value="">選ぶ</option>
             {titles.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -253,14 +250,13 @@ export function ExpenseForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <IntentButton intent="submit" variant="primary" pendingText="申請中…">
-          {returned ? "直して申請する" : "申請する"}
+        <p className="text-sm text-ink-muted">登録すると確定し、あとから直せません。</p>
+        <IntentButton intent="confirm" variant="primary" pendingText="登録中…">
+          登録する
         </IntentButton>
-        {!returned && (
-          <IntentButton intent="save" variant="secondary" pendingText="保存中…">
-            下書きを保存する
-          </IntentButton>
-        )}
+        <IntentButton intent="save" variant="secondary" pendingText="保存中…">
+          下書きを保存する
+        </IntentButton>
       </div>
     </form>
   );

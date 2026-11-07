@@ -20,9 +20,6 @@ export const TASK_TYPES = {
   attendance_alert_self: { label: "勤怠の確認", feature: "E-02", manualComplete: false },
   // E-04 受け取った請求書の確認。「確認して支払予定にする」「取り消す」で E-04 が自動で完了にする(E-04 03 の 0.4)
   payable_review: { label: "受け取った請求書の確認", feature: "E-04", manualComplete: false },
-  // E-07 経費。承認・差し戻し、申請し直す・取り下げで閉じる
-  expense_approve: { label: "経費の承認", feature: "E-07", manualComplete: false },
-  expense_returned: { label: "経費の差し戻し", feature: "E-07", manualComplete: false },
   // B-04 今週の棚卸(【仮】B-04 で決める)
   stocktake: { label: "今週の棚卸", feature: "B-04", manualComplete: true },
   // C-02 検収の確認(C-02 の 01 の 7章・9章 #8 の仮の値)

@@ -14,7 +14,7 @@ import { listAllPriceItems } from "../price-items/priceItemData";
 import type { InquiryDetail, InquiryReply } from "../inquiryData";
 
 // 0.3 で外した「ご予算」は出さない
-const SHOWN_SPEC_FIELDS: CustomSpecField[] = ["group_name", "item", "fabric", "size_and_quantity", "name_print", "desired_delivery"];
+const SHOWN_SPEC_FIELDS: CustomSpecField[] = ["group_name", "item", "design", "fabric", "size_and_quantity", "name_print", "desired_delivery"];
 
 // EV-01 パネルを開く
 export async function CustomQuotePanel({ inquiry, closed }: { inquiry: InquiryDetail; closed: boolean }) {

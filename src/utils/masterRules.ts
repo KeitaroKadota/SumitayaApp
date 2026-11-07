@@ -4,11 +4,16 @@
 
 // ---- 従業員(CMN-02 01 6.1・04 CH-05) ----
 
-// 【仮】所属と雇用形態の種類(CMN02-仮-01。ヒアリング No.28)
+// 【仮】所属の種類(CMN02-仮-01。所属はヒアリングで未回答)
 export const DEPARTMENTS = { store: "店舗", factory: "工場", office: "事務" } as const;
 export type Department = keyof typeof DEPARTMENTS;
 
-export const EMPLOYMENT_TYPES = { full_time: "正社員", part_time: "パート", other: "その他" } as const;
+// 雇用形態(CMN-02 0.4 の 6.1・CH-05。ヒアリング No.28: 正社員・パート(常時)・パート(臨時))
+export const EMPLOYMENT_TYPES = {
+  full_time: "正社員",
+  part_time_regular: "パート（常時）",
+  part_time_temporary: "パート（臨時）",
+} as const;
 export type EmploymentType = keyof typeof EMPLOYMENT_TYPES;
 
 // 【仮】所属を選んだときの権限の初期値(CMN02-仮-02)。店舗→店舗、工場→工場、事務→経理

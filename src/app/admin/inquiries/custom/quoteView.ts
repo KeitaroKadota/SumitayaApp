@@ -2,6 +2,7 @@
 import type { BadgeTone } from "@/components/Badge";
 import {
   CUSTOM_SIZES,
+  MISSING_ITEM_LABELS,
   importSpecFromMessages,
   optionIdOf,
   type CustomQuoteStatus,
@@ -31,9 +32,9 @@ export const quoteCandidates = (quote: CustomQuote, thread: ThreadMessage[], ite
     items
   );
 
-// 足りない項目の表示(サイズの内訳だけ足りないときは、分かっている合計の枚数を添える。02 の G03)
+// 足りない項目の表示(サイズだけ足りないときは、分かっている合計の枚数を添える。02 の G03)
 export const missingItemText = (quote: CustomQuote, item: string): string =>
-  item === "サイズの内訳" && quote.spec.quantity ? `${item}（合計${quote.spec.quantity}枚は分かる）` : item;
+  item === MISSING_ITEM_LABELS.sizeBreakdown && quote.spec.quantity ? `${item}（合計${quote.spec.quantity}枚は分かる）` : item;
 
 // 仕様のフォームの初めの値(生地・名入れは選ぶ欄のIDにそろえる)
 export const specFormValues = (quote: CustomQuote, items: PriceItem[]): Record<string, string> => {
@@ -44,6 +45,7 @@ export const specFormValues = (quote: CustomQuote, items: PriceItem[]): Record<s
     customer_email: quote.customerEmail ?? "",
     customer_phone: quote.customerPhone ?? "",
     item_type: s.itemType ?? "",
+    design_note: s.designNote ?? "",
     fabric_item_id: optionIdOf(items, s.fabricItemId, "fabric") ?? "",
     fabric_note: s.fabricNote ?? "",
     quantity: s.quantity === null ? "" : String(s.quantity),

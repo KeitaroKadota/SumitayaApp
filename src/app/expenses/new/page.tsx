@@ -1,4 +1,4 @@
-// G02 経費の申請(撮影。スマホ。E-07 03 EV-02)。機能キー expenses_apply(全員)。
+// G02 経費の登録(撮影。スマホ。E-07 03 EV-02)。機能キー expenses_apply(全員)。
 // 撮影するとすぐに保存・読み取りを行い、終わったら /expenses/[id] の確認の画面へ移る。
 import { fullName, requireAccess } from "@/utils/auth";
 import { EXPENSES_URL } from "@/utils/expenseClaimsServer";
@@ -22,7 +22,7 @@ export default async function NewExpensePage() {
         <div>
           <BackLink href={EXPENSES_URL} label="一覧へ" />
         </div>
-        <h1 className="text-xl font-bold">経費の申請</h1>
+        <h1 className="text-xl font-bold">経費の登録</h1>
         <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
           <h2 className="font-bold">領収書</h2>
           <p className="text-sm text-ink-muted">

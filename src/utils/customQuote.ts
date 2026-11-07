@@ -70,7 +70,11 @@ export type PriceItem = {
 export type SizeQty = { size: string; qty: number };
 
 export type QuoteSpec = {
+  // 希望の商品(単価表の縫製の行の品目)
   itemType: string | null;
+  // デザインの希望(色柄・紋・文字など。0.4 で足した。No.24)
+  designNote: string | null;
+  // 生地・名入れは概算にだけ使う【仮】(聞き返しの判定には入れない。01 の 4.1)
   fabricItemId: string | null;
   fabricNote: string | null;
   sizeBreakdown: SizeQty[] | null;
@@ -85,23 +89,23 @@ export type QuoteSpec = {
 
 // ---- 0.1 findMissingItems 足りない項目(01 の 4.1 の「聞き返しに使う」項目) ----
 
-// 【仮】必ず聞く項目(No.24 の回答で変える。00_仮決め一覧 D-04-仮-01)
+// 必ず聞く項目(No.24 の回答: 希望の商品・デザイン・数量・サイズ・納期。並びもこの順)。
+// 生地・名入れは調べない【仮】(概算のときに CH-05 で確かめる。00_仮決め一覧 D-04-仮-01)。
+// 値は missing_items に保存する(0033 の SQL で今ある案件を計算し直したときも、この名前を使った)
 export const MISSING_ITEM_LABELS = {
-  itemType: "品目",
-  fabric: "生地",
-  sizeBreakdown: "サイズの内訳",
-  quantity: "枚数",
-  print: "名入れ",
-  desiredDate: "希望納期",
+  itemType: "希望の商品",
+  design: "デザイン",
+  quantity: "数量",
+  sizeBreakdown: "サイズ",
+  desiredDate: "納期",
 } as const;
 
 export const findMissingItems = (spec: QuoteSpec): string[] => {
   const missing: string[] = [];
   if (!spec.itemType) missing.push(MISSING_ITEM_LABELS.itemType);
-  if (!spec.fabricItemId && !spec.fabricNote) missing.push(MISSING_ITEM_LABELS.fabric);
-  if (!spec.sizeBreakdown || spec.sizeBreakdown.length === 0) missing.push(MISSING_ITEM_LABELS.sizeBreakdown);
+  if (!spec.designNote) missing.push(MISSING_ITEM_LABELS.design);
   if (!spec.quantity) missing.push(MISSING_ITEM_LABELS.quantity);
-  if (!spec.printItemId && !spec.printNone) missing.push(MISSING_ITEM_LABELS.print);
+  if (!spec.sizeBreakdown || spec.sizeBreakdown.length === 0) missing.push(MISSING_ITEM_LABELS.sizeBreakdown);
   if (!spec.desiredDate) missing.push(MISSING_ITEM_LABELS.desiredDate);
   return missing;
 };
@@ -212,12 +216,15 @@ const lineOf = (item: PriceItem, quantity: number): EstimateLine => {
 };
 
 export const calcEstimate = (spec: QuoteSpec, items: PriceItem[]): EstimateResult => {
-  // 手順1: CH-05 概算に必要な項目
+  // 手順1: CH-05 概算に必要な項目(品目・生地〔単価表の行〕・合計の枚数・名入れ〔方法または「なし」〕)。
+  // 生地・名入れは聞き返しの判定に入れていない【仮】ため、そろっていなければ「概算の前に」入れてもらう
   const reasons: string[] = [];
-  if (!spec.itemType) reasons.push("品目を選んでください。");
-  if (!spec.fabricItemId) reasons.push(spec.fabricNote ? "生地を単価表から選んでください。" : "生地を選んでください。");
-  if (!spec.quantity) reasons.push("合計の枚数を入れてください。");
-  if (!spec.printItemId && !spec.printNone) reasons.push("名入れの方法を選ぶか「なし」にしてください。");
+  if (!spec.itemType) reasons.push("希望の商品を選んでください。");
+  if (!spec.quantity) reasons.push("数量（合計の枚数）を入れてください。");
+  const noFabric = !spec.fabricItemId && !spec.fabricNote;
+  const noPrint = !spec.printItemId && !spec.printNone;
+  if (noFabric || noPrint) reasons.push("概算の前に、生地・名入れを入れてください。");
+  if (!spec.fabricItemId && spec.fabricNote) reasons.push("生地を単価表から選んでください。");
   if (reasons.length > 0 || !spec.itemType || !spec.fabricItemId || !spec.quantity) return { ok: false, reasons };
   const itemType = spec.itemType;
   const quantity = spec.quantity;
@@ -257,11 +264,12 @@ export const estimateAmounts = (e: { lines: EstimateLine[]; subtotal: number; ta
 // ---- CH-11 工場に依頼できる ----
 
 // 品目・合計の枚数・名入れ(方法または「なし」)・希望納期(生地は未定でもよい)。足りない項目の名前を返す
+// (0.4 では条件を変えない。デザインに名入れが入るかの答えで見直す。04 CH-11)
 export const factoryRequestMissing = (spec: QuoteSpec): string[] => {
   const missing: string[] = [];
   if (!spec.itemType) missing.push(MISSING_ITEM_LABELS.itemType);
   if (!spec.quantity) missing.push("合計の枚数");
-  if (!spec.printItemId && !spec.printNone) missing.push(MISSING_ITEM_LABELS.print);
+  if (!spec.printItemId && !spec.printNone) missing.push("名入れ");
   if (!spec.desiredDate) missing.push(MISSING_ITEM_LABELS.desiredDate);
   return missing;
 };
@@ -292,6 +300,7 @@ export const canChangeQuoteStatus = (from: CustomQuoteStatus, to: CustomQuoteSta
 // D-01 が抜き出した特注の仕様(InquiryExtracted の custom_spec と desired_date)
 export type ExtractedCustomSpec = {
   item?: string | null;
+  design?: string | null;
   fabric?: string | null;
   size_and_quantity?: string | null;
   name_print?: string | null;
@@ -302,6 +311,7 @@ export type ExtractedCustomSpec = {
 export type SpecCandidateField =
   | "organization_name"
   | "item_type"
+  | "design_note"
   | "fabric_item_id"
   | "fabric_note"
   | "print_item_id"
@@ -356,9 +366,12 @@ export const importSpecFromInquiry = (
   const item = text(x.item);
   if (item) {
     const match = itemTypeOptions(items).find((t) => normalizeName(t) === normalizeName(item));
-    if (match) push("item_type", "品目", s.itemType, match);
+    if (match) push("item_type", "希望の商品", s.itemType, match);
     else notes.push(`品目の希望: ${item}`);
   }
+  // 手順4: デザインは文のまま design_note の候補にする(0.4)
+  const design = text(x.design);
+  if (design) push("design_note", "デザイン", s.designNote, design.slice(0, CUSTOM_QUOTE_LIMITS.text));
   const fabric = text(x.fabric);
   if (fabric) {
     const match = priceOptions(items, "fabric").find((o) => normalizeName(o.name) === normalizeName(fabric));

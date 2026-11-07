@@ -1,6 +1,7 @@
 // 権限表(CMN-01 01 3.2、00_共通設計 2章)。権限の決まりはこのファイルの1か所にだけ書く。
 // この表を直せば、メニュー・タイルの出し分けと権限チェック(requireAccess)の両方が変わる。
-// 【仮】ヒアリング No.45・46 の回答で見直す(00_仮決め一覧 CMN01-仮-01)。設計書の表と一緒に直すこと。
+// ヒアリング No.45・46 と 2026-11-08 の角田さんの決定で見直した(00_仮決め一覧 CMN01-仮-01)。設計書の表と一緒に直すこと。
+// 給与・経費の管理・売上は社長だけ。経理の区分は将来の担当者のために残す(経理の担当者は今はいない。No.45)。
 // DBを読まない計算だけのファイルなので、画面の部品(クライアント)からも使える。
 
 export const ROLES = ["president", "store", "factory", "accounting"] as const;
@@ -30,13 +31,13 @@ export const FEATURES = {
   inquiry_settings: { label: "よくある質問・単価表・ひな形の管理", roles: ["store"], admin: true },
   timecard: { label: "打刻・自分の勤怠", roles: ["store", "factory", "accounting"], admin: false },
   attendance_admin: { label: "全員の勤怠チェック・シフト", roles: ["accounting"], admin: true },
-  payroll: { label: "給与CSV", roles: ["accounting"], admin: true },
+  payroll: { label: "給与CSV", roles: [], admin: true },
   payables: { label: "受け取った請求書・支払予定", roles: ["accounting"], admin: true },
   receivables: { label: "請求書の発行・入金消込", roles: ["accounting"], admin: true },
-  expenses_apply: { label: "経費の申請", roles: ["store", "factory", "accounting"], admin: false },
-  expenses_admin: { label: "全員の経費の一覧・CSV", roles: ["accounting"], admin: true },
-  expenses_approve: { label: "経費の承認", roles: [], admin: true },
-  sales: { label: "売上・分析・予測・発注の下書き", roles: ["store"], admin: true },
+  // 【未決】経費を使うのは社長だけ(No.33)。全員に残すかは E-07-未-03
+  expenses_apply: { label: "経費の撮影・登録", roles: ["store", "factory", "accounting"], admin: false },
+  expenses_admin: { label: "全員の経費の一覧・CSV", roles: [], admin: true },
+  sales: { label: "売上・分析・予測・発注の下書き", roles: [], admin: true },
   production: { label: "製造指示", roles: ["store", "factory"], admin: true },
   orders: { label: "受注", roles: ["store"], admin: true },
   inventory: { label: "在庫の増減・棚卸", roles: ["store", "factory"], admin: true },

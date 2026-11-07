@@ -21,6 +21,7 @@ export const factorySummaryRows = (quote: CustomQuote, items: PriceItem[]): Summ
     { label: "番号", value: quote.quoteNumber },
     { label: "団体名", value: quote.organizationName ?? "−" },
     { label: "品目", value: s.itemType ?? "−" },
+    { label: "デザイン", value: s.designNote ?? "−" },
     { label: "生地", value: fabric },
     { label: "サイズと枚数", value: sizes ? `${sizes}（${qty}）` : qty },
     { label: "名入れ", value: print },

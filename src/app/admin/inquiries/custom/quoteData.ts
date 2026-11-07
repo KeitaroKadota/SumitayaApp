@@ -36,6 +36,7 @@ type QuoteRow = {
   customer_email: string | null;
   customer_phone: string | null;
   item_type: string | null;
+  design_note: string | null;
   fabric_item_id: string | null;
   fabric_note: string | null;
   size_breakdown: SizeQty[] | null;
@@ -65,7 +66,7 @@ type QuoteRow = {
 };
 
 const QUOTE_COLUMNS = `q.id, q.quote_number, q.inquiry_id, q.organization_name, q.customer_name, q.customer_email, q.customer_phone,
-  q.item_type, q.fabric_item_id, q.fabric_note, q.size_breakdown, q.quantity, q.print_item_id, q.print_none, q.print_text,
+  q.item_type, q.design_note, q.fabric_item_id, q.fabric_note, q.size_breakdown, q.quantity, q.print_item_id, q.print_none, q.print_text,
   to_char(q.desired_date, 'YYYY-MM-DD') as desired_date, q.spec_note, q.missing_items, q.status,
   q.estimate_subtotal, q.estimate_tax, q.estimate_total, q.estimate_lines, q.estimated_at,
   q.factory_requested_at, q.factory_request_text, fe.last_name || ' ' || fe.first_name as factory_requested_by_name,
@@ -85,6 +86,7 @@ const toQuote = (r: QuoteRow): CustomQuote => ({
   customerPhone: r.customer_phone,
   spec: {
     itemType: r.item_type,
+    designNote: r.design_note,
     fabricItemId: r.fabric_item_id,
     fabricNote: r.fabric_note,
     sizeBreakdown: r.size_breakdown,
@@ -193,10 +195,10 @@ export const insertQuote = async (
     const s = input.spec;
     const [row] = await tx<{ id: string }[]>`
       insert into custom_quotes (quote_number, inquiry_id, organization_name, customer_name, customer_email, customer_phone,
-                                 item_type, fabric_item_id, fabric_note, size_breakdown, quantity, print_item_id, print_none,
+                                 item_type, design_note, fabric_item_id, fabric_note, size_breakdown, quantity, print_item_id, print_none,
                                  print_text, desired_date, spec_note, missing_items, status, assigned_to, created_by, updated_by)
       values (${number}, ${input.inquiryId}, ${input.organizationName}, ${input.customerName}, ${input.customerEmail},
-              ${input.customerPhone}, ${s.itemType}, ${s.fabricItemId}, ${s.fabricNote},
+              ${input.customerPhone}, ${s.itemType}, ${s.designNote}, ${s.fabricItemId}, ${s.fabricNote},
               ${s.sizeBreakdown ? tx.json(s.sizeBreakdown as never) : null}, ${s.quantity}, ${s.printItemId}, ${s.printNone},
               ${s.printText}, ${s.desiredDate}::date, ${s.specNote}, ${input.missingItems}::text[], 'hearing', ${by}, ${by}, ${by})
       returning id`;
@@ -219,7 +221,7 @@ export const updateQuoteSpec = async (
       update custom_quotes set
         organization_name = ${contact.organizationName}, customer_name = ${contact.customerName},
         customer_email = ${contact.customerEmail}, customer_phone = ${contact.customerPhone},
-        item_type = ${spec.itemType}, fabric_item_id = ${spec.fabricItemId}, fabric_note = ${spec.fabricNote},
+        item_type = ${spec.itemType}, design_note = ${spec.designNote}, fabric_item_id = ${spec.fabricItemId}, fabric_note = ${spec.fabricNote},
         size_breakdown = ${spec.sizeBreakdown ? sql.json(spec.sizeBreakdown as never) : null}, quantity = ${spec.quantity},
         print_item_id = ${spec.printItemId}, print_none = ${spec.printNone}, print_text = ${spec.printText},
         desired_date = ${spec.desiredDate}::date, spec_note = ${spec.specNote}, missing_items = ${missingItems}::text[],

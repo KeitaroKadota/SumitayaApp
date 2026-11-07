@@ -2,7 +2,6 @@ import Link from "next/link";
 import { canAccess, fullName, requireLogin } from "@/utils/auth";
 import { getLineLinkStatus } from "@/utils/lineAccount";
 import { canUseAdmin, formatRoles } from "@/utils/permissions";
-import { countMyReturned } from "@/utils/expenseClaimsServer";
 import { countMyOpenTasks } from "@/utils/tasks";
 import { Alert } from "@/components/Alert";
 import { Badge } from "@/components/Badge";
@@ -19,7 +18,6 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   // CMN-03: タスクのタイルの件数と、LINE が未連携の人への案内(DBの接続1本の決まりのため順番に読む)
   const taskCounts = canAccess(me.roles, "tasks") ? await countMyOpenTasks(me) : null;
   const line = await getLineLinkStatus(me.id);
-  const returnedExpenses = canAccess(me.roles, "expenses_apply") ? await countMyReturned(me.id) : null;
 
   return (
     <>
@@ -59,14 +57,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               }
             />
           )}
-          {returnedExpenses !== null && (
-            <HomeTile
-              href="/expenses"
-              label="経費"
-              icon={<ReceiptIcon />}
-              badges={returnedExpenses > 0 ? <Badge tone="danger">差し戻し {returnedExpenses}件</Badge> : undefined}
-            />
-          )}
+          {/* E-07 経費(0.4 で差し戻しの件数は外した) */}
+          {canAccess(me.roles, "expenses_apply") && <HomeTile href="/expenses" label="経費" icon={<ReceiptIcon />} />}
         </HomeTiles>
 
         <div className="flex flex-col gap-2">

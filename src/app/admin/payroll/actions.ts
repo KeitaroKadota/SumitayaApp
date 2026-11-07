@@ -1,6 +1,6 @@
 "use server";
 
-// 給与CSVの操作(E-03 03 の EV-03 締める前のチェック・EV-04 締めの確定・EV-06 締めの解除)。機能キー payroll(社長・経理)。
+// 給与CSVの操作(E-03 03 の EV-03 締める前のチェック・EV-04 締めの確定・EV-06 締めの解除)。機能キー payroll(社長だけ。No.46)。
 // 結果は戻り値(FormState)で返し、できたら G01 へ移す(Next.js の説明書 01-getting-started/10-error-handling.md)。
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
