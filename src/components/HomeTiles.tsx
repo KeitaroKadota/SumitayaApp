@@ -53,3 +53,13 @@ export function ReceiptIcon() {
     </svg>
   );
 }
+
+// 納品書のアイコン(箱。C-01)
+export function SlipIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7l9-4 9 4v10l-9 4-9-4z" />
+      <path d="M3 7l9 4 9-4M12 11v10" />
+    </svg>
+  );
+}

@@ -5,7 +5,7 @@ import { canUseAdmin, formatRoles } from "@/utils/permissions";
 import { countMyOpenTasks } from "@/utils/tasks";
 import { Alert } from "@/components/Alert";
 import { Badge } from "@/components/Badge";
-import { HomeTile, HomeTiles, ReceiptIcon, TaskIcon } from "@/components/HomeTiles";
+import { HomeTile, HomeTiles, ReceiptIcon, SlipIcon, TaskIcon } from "@/components/HomeTiles";
 import { LinkButton } from "@/components/LinkButton";
 import { LogoutButton } from "@/components/LogoutButton";
 import { StaffHeader } from "@/components/StaffHeader";
@@ -59,6 +59,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           )}
           {/* E-07 経費(0.4 で差し戻しの件数は外した) */}
           {canAccess(me.roles, "expenses_apply") && <HomeTile href="/expenses" label="経費" icon={<ReceiptIcon />} />}
+          {/* C-01 納品書を撮る(02 の画面の移り変わり「ホーム タイル」) */}
+          {canAccess(me.roles, "purchasing") && <HomeTile href="/purchasing/slips/new" label="納品書を撮る" icon={<SlipIcon />} />}
         </HomeTiles>
 
         <div className="flex flex-col gap-2">

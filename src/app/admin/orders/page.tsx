@@ -95,7 +95,13 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
 
       {importedMessage && <Alert tone="success">{importedMessage}</Alert>}
       {imported[2] === "failed" && (
-        <Alert tone="warning">例外の確認に失敗しました。もう一度［例外を調べ直す］を押してください。</Alert>
+        <Alert tone="warning">
+          例外の確認に失敗しました。もう一度
+          <Link href="/admin/orders/exceptions" className="font-bold text-primary underline">
+            ［例外を調べ直す］
+          </Link>
+          を押してください。
+        </Alert>
       )}
       {salesSkipped > 0 && (
         <Alert tone="warning">
@@ -110,8 +116,15 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
             : `最後の取り込み: ${formatDateTime(latest.at)} 失敗しました${latest.message ? `（${latest.message}）` : ""}`
           : "まだ取り込んでいません。"}
       </p>
-      {/* 例外の案内(未対応があるときだけ)。【仮】B-02 の画面はまだ無いので、件数だけを出す(00_仮決め一覧 B-01-仮-14) */}
-      {openExceptions > 0 && <Alert tone="warning">例外注文が {formatQuantity(openExceptions)}件 あります（B-02 で確認）</Alert>}
+      {/* 例外の案内(未対応があるときだけ)。B-02 の例外注文の一覧へ */}
+      {openExceptions > 0 && (
+        <Alert tone="warning">
+          例外注文が {formatQuantity(openExceptions)}件 あります。{" "}
+          <Link href="/admin/orders/exceptions" className="font-bold text-primary underline">
+            例外注文の一覧へ
+          </Link>
+        </Alert>
+      )}
 
       <form method="get" className="flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface p-4">
         <Field id="q" label="検索">

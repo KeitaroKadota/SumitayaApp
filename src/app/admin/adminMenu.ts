@@ -44,9 +44,24 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { group: "問い合わせ", href: "/admin/inquiries/price-items", label: "単価表", feature: "inquiry_settings" },
   // D-06 返品依頼への回答(02 の G02。「問い合わせ ＞ 返品」)
   { group: "問い合わせ", href: "/admin/inquiries/returns", label: "返品", feature: "inquiries" },
-  // B-01 CROSS MALL からの受注・在庫の取り込み(02 の G01・G05)。「例外注文(B-02)」は B-02 の画面を作るときに足す
+  // B-01 CROSS MALL からの受注・在庫の取り込み(02 の G01・G05)
   { group: "受注・在庫", href: "/admin/orders", label: "受注", feature: "orders" },
+  // B-02 例外注文の抽出(02 の G01)
+  { group: "受注・在庫", href: "/admin/orders/exceptions", label: "例外注文", feature: "orders" },
   { group: "受注・在庫", href: "/admin/inventory", label: "在庫", feature: ["orders", "inventory"] },
+  // A-01 売上データの取り込み・A-02 ABC分析・A-03 需要予測・発注の提案・A-05 在庫指標(各 02 の画面一覧)
+  { group: "売上・発注", href: "/admin/sales", label: "売上", feature: "sales" },
+  { group: "売上・発注", href: "/admin/sales/import", label: "売上の取り込み", feature: "sales" },
+  { group: "売上・発注", href: "/admin/sales/abc", label: "ABC分析", feature: "sales" },
+  { group: "売上・発注", href: "/admin/forecast", label: "予測と発注の提案", feature: "sales" },
+  { group: "売上・発注", href: "/admin/purchase-orders", label: "発注", feature: "sales" },
+  { group: "売上・発注", href: "/admin/forecast/festivals", label: "祭礼カレンダー", feature: "sales" },
+  { group: "売上・発注", href: "/admin/sales/dashboard", label: "在庫の指標", feature: "sales" },
+  // C-01 納品書の読み取り(02 の G01・G04)
+  { group: "仕入・検収", href: "/admin/purchasing/slips", label: "納品書", feature: "purchasing" },
+  { group: "仕入・検収", href: "/admin/purchasing/item-codes", label: "品番の対応表", feature: "purchasing" },
+  // C-02 発注との照合・検収(02 の G01)
+  { group: "仕入・検収", href: "/admin/purchasing/receiving", label: "検収", feature: "purchasing" },
   // E-04 受け取った請求書の読み取り・支払予定(02 の画面一覧。「受け取った請求書」には確認待ちの件数を出す)
   { group: "請求・支払", href: "/admin/payables", label: "受け取った請求書", feature: "payables", badge: "payables_review" },
   { group: "請求・支払", href: "/admin/payables/schedule", label: "支払予定", feature: "payables" },

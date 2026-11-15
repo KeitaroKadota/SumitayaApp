@@ -1,11 +1,11 @@
 import { requireAccess } from "@/utils/auth";
-import { listOpenOrderExceptions } from "@/utils/crossmall/laterLinks";
 import { SHOP_LABELS } from "@/utils/crossmall/types";
 import { formatDate, formatDateTime, formatQuantity, formatYen } from "@/utils/format";
 import { getOrderWithItems } from "@/utils/orders";
 import { Alert } from "@/components/Alert";
 import { Badge } from "@/components/Badge";
 import { BackLink } from "@/components/LinkButton";
+import { OrderExceptionPanel } from "../exceptions/OrderExceptionPanel";
 
 const PAYMENT_STATUS_LABELS = { paid: "支払済み", unpaid: "未払い", unknown: "支払の状態は不明" } as const;
 
@@ -30,8 +30,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/admin/orde
       </div>
     );
   }
-  // 手順3: この注文の未対応の例外(B-02。【仮】B-02 はまだ無いので空。00_仮決め一覧 B-01-仮-14)
-  const exceptions = await listOpenOrderExceptions(order.id);
+  // 手順3: この注文の例外は、B-02 の例外の対応欄(OrderExceptionPanel。B-02 02 G02)で出す
 
   const rowClass = "grid grid-cols-[8rem_1fr] gap-2 border-b border-line py-2 last:border-b-0";
   return (
@@ -41,14 +40,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/admin/orde
       </div>
       <h1 className="text-2xl font-bold">受注の詳細</h1>
 
-      {exceptions.length > 0 && (
-        <Alert tone="warning">
-          <p className="font-bold">例外（B-02）</p>
-          {exceptions.map((e) => (
-            <p key={e}>{e}</p>
-          ))}
-        </Alert>
-      )}
+      <OrderExceptionPanel orderId={order.id} />
 
       <section className="rounded-lg border border-line bg-surface px-5 py-2 text-sm">
         <div className={rowClass}>
