@@ -262,7 +262,7 @@ const loadAndCalc = async (tx: TransactionSql, today: string, by: string): Promi
       )
       select ${run.id}, d.product_id, d.week_start, d.method, d.base_qty, d.festival_event_id, d.shift_days, d.growth_rate,
              d.growth_basis, d.festival_factor, d.bias_factor, d.forecast_value, d.forecast_qty
-      from jsonb_to_recordset(${JSON.stringify(fRecords.slice(i, i + CHUNK_SIZE))}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(fRecords.slice(i, i + CHUNK_SIZE))}::text::jsonb) as d (
         product_id uuid, week_start date, method text, base_qty numeric, festival_event_id uuid, shift_days integer,
         growth_rate numeric, growth_basis text, festival_factor numeric, bias_factor numeric, forecast_value numeric, forecast_qty integer
       )`;
@@ -290,7 +290,7 @@ const loadAndCalc = async (tx: TransactionSql, today: string, by: string): Promi
       )
       select ${run.id}, d.product_id, d.destination, d.supplier_id, d.abc_rank, d.lead_time_days, d.review_weeks, d.on_hand_qty,
              d.on_order_qty, d.lead_time_demand, d.safety_stock, d.reorder_point, d.suggested_qty, d.reason
-      from jsonb_to_recordset(${JSON.stringify(sRecords.slice(i, i + CHUNK_SIZE))}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(sRecords.slice(i, i + CHUNK_SIZE))}::text::jsonb) as d (
         product_id uuid, destination text, supplier_id uuid, abc_rank text, lead_time_days integer, review_weeks numeric,
         on_hand_qty integer, on_order_qty integer, lead_time_demand integer, safety_stock integer, reorder_point integer,
         suggested_qty integer, reason text

@@ -70,7 +70,7 @@ export const rebuildSalesFromOrders = async (
       )
       select d.sales_date, d.channel, d.product_code, d.product_id, d.product_name, d.quantity, d.amount_excl_tax,
              d.amount_incl_tax, d.line_count, 'orders'
-      from jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(records)}::text::jsonb) as d (
         sales_date date, channel text, product_code text, product_id uuid, product_name text, quantity integer,
         amount_excl_tax integer, amount_incl_tax integer, line_count integer
       )`;

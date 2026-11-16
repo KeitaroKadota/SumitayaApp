@@ -179,7 +179,7 @@ export const applyStocks = async (
     const rows = await tx<{ id: string }[]>`
       insert into inventory_levels (product_id, location_code, quantity, allocated_quantity, available_quantity, synced_at)
       select d.product_id, d.location_code, d.quantity, d.allocated_quantity, d.available_quantity, now()
-      from jsonb_to_recordset(${records}::jsonb) as d (
+      from jsonb_to_recordset(${records}::text::jsonb) as d (
         product_id uuid, location_code text, quantity integer, allocated_quantity integer, available_quantity integer
       )
       on conflict (product_id, location_code) do update set

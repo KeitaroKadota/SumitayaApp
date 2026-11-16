@@ -441,7 +441,7 @@ export const applySalesPlan = async (
       update sales_daily s set
         quantity = d.quantity, amount_excl_tax = d.amount_excl_tax, amount_incl_tax = d.amount_incl_tax,
         line_count = d.line_count, product_id = d.product_id, product_name = d.product_name, import_batch_id = d.import_batch_id
-      from jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(records)}::text::jsonb) as d (
         id uuid, quantity integer, amount_excl_tax integer, amount_incl_tax integer, line_count integer,
         product_id uuid, product_name text, import_batch_id uuid
       )
@@ -457,7 +457,7 @@ export const applySalesPlan = async (
       )
       select d.sales_date, d.channel, d.product_code, d.product_id, d.product_name, d.quantity, d.amount_excl_tax,
              d.amount_incl_tax, d.line_count, d.source, d.import_batch_id
-      from jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(records)}::text::jsonb) as d (
         sales_date date, channel text, product_code text, product_id uuid, product_name text, quantity integer,
         amount_excl_tax integer, amount_incl_tax integer, line_count integer, source text, import_batch_id uuid
       )`;

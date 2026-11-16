@@ -282,7 +282,7 @@ export const insertReturnRequest = async (input: NewReturnInput, year: number, b
       insert into return_request_items (return_request_id, order_item_id, product_id, product_name, quantity, unit_price,
                                         exchange_product_id)
       select d.return_request_id, d.order_item_id, d.product_id, d.product_name, d.quantity, d.unit_price, d.exchange_product_id
-      from jsonb_to_recordset(${JSON.stringify(items)}::jsonb) as d (
+      from jsonb_to_recordset(${JSON.stringify(items)}::text::jsonb) as d (
         return_request_id uuid, order_item_id uuid, product_id uuid, product_name text, quantity integer, unit_price integer,
         exchange_product_id uuid
       )`;

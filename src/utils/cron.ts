@@ -72,7 +72,7 @@ export const runJob = async (job: DailyJob, today: string = todayJST()): Promise
       await query(
         (sql) => sql`
           update cron_runs
-          set status = ${status}, finished_at = now(), summary = ${summary ? JSON.stringify(summary) : null}::jsonb, error = ${error}
+          set status = ${status}, finished_at = now(), summary = ${summary ? JSON.stringify(summary) : null}::text::jsonb, error = ${error}
           where id = ${runId}`
       );
     } catch (e) {

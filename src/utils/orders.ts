@@ -250,7 +250,7 @@ export const applyOrders = async (
              d.ship_name, d.ship_postal_code, d.ship_prefecture, d.ship_address1, d.ship_address2, d.ship_phone,
              d.payment_method, d.payment_status, d.requested_delivery_date, d.customer_note,
              d.subtotal, d.shipping_fee, d.discount, d.tax, d.total, d.raw_row, ${importBatchId}::uuid
-      from jsonb_to_recordset(${records}::jsonb) as d (
+      from jsonb_to_recordset(${records}::text::jsonb) as d (
         crossmall_order_no text, shop text, shop_order_no text, ordered_at timestamptz, crossmall_status text,
         is_cancelled boolean, shipped_on date, customer_name text, customer_kana text, customer_email text,
         customer_phone text, customer_phone_digits text, ship_name text, ship_postal_code text, ship_prefecture text,
@@ -304,7 +304,7 @@ export const applyOrders = async (
         )
         select d.order_id, d.line_no, d.product_code, d.product_id, d.product_name, d.option_text, d.has_customization,
                d.customization_text, d.quantity, d.unit_price, d.amount
-        from jsonb_to_recordset(${JSON.stringify(items)}::jsonb) as d (
+        from jsonb_to_recordset(${JSON.stringify(items)}::text::jsonb) as d (
           order_id uuid, line_no integer, product_code text, product_id uuid, product_name text, option_text text,
           has_customization boolean, customization_text text, quantity integer, unit_price integer, amount integer
         )`;

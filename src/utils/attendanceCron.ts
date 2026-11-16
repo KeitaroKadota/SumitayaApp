@@ -183,7 +183,7 @@ const syncAlerts = async (
         // 新規 → open で登録し、タスクを発行
         const [inserted] = await tx<{ id: string }[]>`
           insert into attendance_alerts (employee_id, work_date, kind, severity, message, detail, status)
-          values (${employeeId}, ${a.workDate}, ${a.kind}, ${a.severity}, ${a.message}, ${detailJson}::jsonb, 'open')
+          values (${employeeId}, ${a.workDate}, ${a.kind}, ${a.severity}, ${a.message}, ${detailJson}::text::jsonb, 'open')
           returning id`;
         const item = { id: inserted.id, workDate: a.workDate, kind: a.kind, message: a.message, detail: a.detail };
         reopened.push(item);
@@ -200,7 +200,7 @@ const syncAlerts = async (
         // 内容が変わった・変わらない → 文と内容を新しくする(タスクは新しく出さない)
         await tx`
           update attendance_alerts
-          set severity = ${a.severity}, message = ${a.message}, detail = ${detailJson}::jsonb, last_detected_at = now()
+          set severity = ${a.severity}, message = ${a.message}, detail = ${detailJson}::text::jsonb, last_detected_at = now()
           where id = ${row.id}`;
         open.push({ id: row.id, workDate: a.workDate, kind: a.kind, message: a.message, detail: a.detail });
         continue;
@@ -208,7 +208,7 @@ const syncAlerts = async (
       // 再発(resolved)・確認済みで内容が変わった(dismissed) → open に戻し、タスクを発行し直す
       await tx`
         update attendance_alerts
-        set status = 'open', severity = ${a.severity}, message = ${a.message}, detail = ${detailJson}::jsonb,
+        set status = 'open', severity = ${a.severity}, message = ${a.message}, detail = ${detailJson}::text::jsonb,
             resolution_note = null, resolved_by = null, resolved_at = null, last_detected_at = now()
         where id = ${row.id}`;
       const item = { id: row.id, workDate: a.workDate, kind: a.kind, message: a.message, detail: a.detail };

@@ -221,7 +221,7 @@ export const runAbc = async (from: string, to: string, today: string, by: string
             )
             select ${run.id}, d.product_id, d.product_code, d.sales_amount, d.sales_quantity, d.frequency, d.amount_share,
                    d.amount_cum_share, d.frequency_cum_share, d.amount_rank, d.frequency_rank, d.rank, d.previous_rank, d.is_new_product
-            from jsonb_to_recordset(${JSON.stringify(records)}::jsonb) as d (
+            from jsonb_to_recordset(${JSON.stringify(records)}::text::jsonb) as d (
               product_id uuid, product_code text, sales_amount bigint, sales_quantity integer, frequency integer,
               amount_share numeric, amount_cum_share numeric, frequency_cum_share numeric, amount_rank text,
               frequency_rank text, rank text, previous_rank text, is_new_product boolean

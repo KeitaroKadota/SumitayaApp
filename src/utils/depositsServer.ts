@@ -258,7 +258,7 @@ export const applyBankImport = async (
     )
     select ${accountId}, ${batchId}, d.transaction_on, d.description, d.payer_name, d.deposit, d.withdrawal, d.balance,
            d.row_hash, d.match_status, d.ignore_reason
-    from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as d (
+    from jsonb_to_recordset(${JSON.stringify(rows)}::text::jsonb) as d (
       transaction_on date, description text, payer_name text, deposit integer, withdrawal integer, balance bigint,
       row_hash text, match_status text, ignore_reason text
     )
@@ -277,7 +277,7 @@ export const applyBankImport = async (
   if (suggestions.length > 0) {
     await tx`
       update bank_transactions t set suggested_invoice_id = d.invoice_id
-      from jsonb_to_recordset(${JSON.stringify(suggestions)}::jsonb) as d (id uuid, invoice_id uuid)
+      from jsonb_to_recordset(${JSON.stringify(suggestions)}::text::jsonb) as d (id uuid, invoice_id uuid)
       where t.id = d.id`;
   }
   const latestOn = inserted.reduce<string | null>((max, r) => (max === null || r.transaction_on > max ? r.transaction_on : max), null);

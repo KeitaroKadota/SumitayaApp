@@ -109,7 +109,7 @@ export const savePayrollClose = async (
     await tx`
       update payroll_exports
       set status = 'closed', closed_by = ${input.by}, closed_at = now(), close_note = ${input.note},
-          close_count = close_count + 1, snapshot = ${snapshotJson}::jsonb, snapshot_hash = ${input.hash}, updated_by = ${input.by}
+          close_count = close_count + 1, snapshot = ${snapshotJson}::text::jsonb, snapshot_hash = ${input.hash}, updated_by = ${input.by}
       where period_start = ${input.period.from}`;
     return;
   }
@@ -117,7 +117,7 @@ export const savePayrollClose = async (
     insert into payroll_exports (year_month, period_start, period_end, status, closed_by, closed_at, close_note,
                                  close_count, snapshot, snapshot_hash, created_by, updated_by)
     values (${input.period.month}, ${input.period.from}, ${input.period.to}, 'closed', ${input.by}, now(), ${input.note},
-            1, ${snapshotJson}::jsonb, ${input.hash}, ${input.by}, ${input.by})`;
+            1, ${snapshotJson}::text::jsonb, ${input.hash}, ${input.by}, ${input.by})`;
 };
 
 // EV-06 手順3 締めを解除する(snapshot は消さない)
