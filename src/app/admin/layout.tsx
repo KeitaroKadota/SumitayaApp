@@ -30,8 +30,9 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         badges={badges}
         logoutSlot={<LogoutButton />}
       />
-      <div className="min-w-0 flex-1 p-6">
-        <div className="mx-auto max-w-6xl">{children}</div>
+      {/* 中身は左メニューのすぐ右に寄せる(中央寄せにしない。2026-11-25 角田さん。00_画面共通ルール 5.2) */}
+      <div className="min-w-0 flex-1 p-6 lg:px-8">
+        <div className="max-w-[1600px]">{children}</div>
       </div>
     </div>
   );

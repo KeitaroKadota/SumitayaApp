@@ -18,7 +18,7 @@ export default async function NewPayablePage() {
   const configured = isStorageConfigured();
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+    <div className="flex w-full max-w-md flex-col gap-4">
       <div>
         <BackLink href={LIST_URL} label="一覧へ" />
       </div>
