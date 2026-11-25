@@ -1,23 +1,30 @@
 // 銀行の入出金明細CSVの「列の対応表」と、1行の読み取り(E-06 01 7.1、04 CH-03・CH-04)。
-// 【仮】列名はすべて仮(00_仮決め一覧 E-06-仮-05・E-06-未-01)。ヒアリング No.27 の明細CSVの見本が届いたら、
-// このファイルの BANK_CSV_FORMATS だけを直す(右側の候補の並びに実際の列名を入れる。その銀行の形を1つ足す)。
+// 2026-11-25: No.27 の見本(PayPay銀行・楽天銀行)の形を足した(01 の 11章)。静岡銀行などは見本が届いたら同じように足す。
 // 候補はどれか1つが見出しにあればよい(前にある候補を優先)。DBを読まない計算だけのファイル(サーバーで使う)。
 import { createHash } from "node:crypto";
 import { resolveColumns, type CsvRow } from "@/utils/csvImport/engine";
 import { isValidDateStr } from "@/utils/textNormalize";
 
+// 列の候補。形によって使う列が違う(PayPay銀行は日付が年・月・日の3列、楽天銀行は入出金が符号つきの1列。01 の 11章)
 type BankColumns = {
-  transactionOn: readonly string[];
+  transactionOn?: readonly string[];
+  transactionYear?: readonly string[];
+  transactionMonth?: readonly string[];
+  transactionDay?: readonly string[];
   description: readonly string[];
-  deposit: readonly string[];
-  withdrawal: readonly string[];
-  balance: readonly string[];
+  deposit?: readonly string[];
+  withdrawal?: readonly string[];
+  // 入出金(プラスが入金・マイナスが出金)
+  signedAmount?: readonly string[];
+  balance?: readonly string[];
 };
 export type BankField = keyof BankColumns;
 
 export type BankCsvFormat = {
   label: string;
   columns: BankColumns;
+  // 必ず要る列(見出しの行を探すときに使う。CH-03)
+  required: readonly { field: BankField; label: string }[];
   // 見出しの行を探す行数(銀行によっては、見出しの前に口座の情報などの行がある)
   headerSearchRows: number;
   // 読み飛ばす行(合計の行など): 取引日が空で、この言葉のどれかを含む行
@@ -37,6 +44,52 @@ export const BANK_CSV_FORMATS = {
       withdrawal: ["出金", "出金額", "お引出金額"],
       balance: ["残高", "差引残高"],
     },
+    required: [
+      { field: "transactionOn", label: "取引日" },
+      { field: "description", label: "摘要" },
+      { field: "deposit", label: "入金" },
+      { field: "withdrawal", label: "出金" },
+    ],
+    headerSearchRows: 10,
+    skipKeywords: ["合計", "小計"],
+  },
+  // PayPay銀行(No.27 の見本。2026-11-25): 日付は年・月・日の3列、入金＝お預り金額、出金＝お支払金額
+  paypay: {
+    label: "PayPay銀行",
+    columns: {
+      transactionYear: ["操作日(年)"],
+      transactionMonth: ["操作日(月)"],
+      transactionDay: ["操作日(日)"],
+      description: ["摘要"],
+      deposit: ["お預り金額"],
+      withdrawal: ["お支払金額"],
+      balance: ["残高"],
+    },
+    required: [
+      { field: "transactionYear", label: "操作日(年)" },
+      { field: "transactionMonth", label: "操作日(月)" },
+      { field: "transactionDay", label: "操作日(日)" },
+      { field: "description", label: "摘要" },
+      { field: "deposit", label: "お預り金額" },
+      { field: "withdrawal", label: "お支払金額" },
+    ],
+    headerSearchRows: 10,
+    skipKeywords: ["合計", "小計"],
+  },
+  // 楽天銀行(No.27 の見本。2026-11-25): 取引日は YYYYMMDD、入出金は符号つきの1列、摘要＝入出金先内容
+  rakuten: {
+    label: "楽天銀行",
+    columns: {
+      transactionOn: ["取引日"],
+      description: ["入出金先内容"],
+      signedAmount: ["入出金(円)"],
+      balance: ["残高(円)"],
+    },
+    required: [
+      { field: "transactionOn", label: "取引日" },
+      { field: "description", label: "入出金先内容" },
+      { field: "signedAmount", label: "入出金(円)" },
+    ],
     headerSearchRows: 10,
     skipKeywords: ["合計", "小計"],
   },
@@ -45,14 +98,6 @@ export type BankCsvFormatKey = keyof typeof BANK_CSV_FORMATS;
 export const isBankCsvFormat = (v: string): v is BankCsvFormatKey => Object.hasOwn(BANK_CSV_FORMATS, v);
 export const bankCsvFormatLabel = (v: string | null): string | null =>
   v && isBankCsvFormat(v) ? BANK_CSV_FORMATS[v].label : null;
-
-// 必須の列(残高は無い形もある。CH-04)
-const REQUIRED_FIELDS: { field: BankField; label: string }[] = [
-  { field: "transactionOn", label: "取引日" },
-  { field: "description", label: "摘要" },
-  { field: "deposit", label: "入金" },
-  { field: "withdrawal", label: "出金" },
-];
 
 // 振込名義を取り出すときに、摘要の先頭から除く言葉(01 7.1。半角カナは全角にしてから比べる)
 const PAYER_PREFIXES = ["振込入金", "振込", "フリコミ"];
@@ -172,9 +217,9 @@ export const readBankRows = (
   for (let at = 0; at < Math.min(format.headerSearchRows, lines.length); at += 1) {
     const resolved = resolveColumns(
       lines[at].cells.map((c) => c.normalize("NFKC").trim()),
-      format.columns
+      format.columns as Record<BankField, readonly string[]>
     );
-    if (REQUIRED_FIELDS.every((f) => resolved.index[f.field] !== undefined)) {
+    if (format.required.every((f) => resolved.index[f.field] !== undefined)) {
       found = { at, index: resolved.index, unused: resolved.unused };
       break;
     }
@@ -182,7 +227,7 @@ export const readBankRows = (
   if (!found)
     return {
       ok: false,
-      error: `見出しの行が見つかりません（必要な列: ${REQUIRED_FIELDS.map((f) => f.label).join("・")}）。ネットバンキングからダウンロードしたCSVか確かめてください。`,
+      error: `見出しの行が見つかりません（${format.label}の形で必要な列: ${format.required.map((f) => f.label).join("・")}）。ネットバンキングからダウンロードしたCSVか、口座の「CSVの形」が合っているか確かめてください。`,
     };
 
   const { index } = found;
@@ -195,8 +240,14 @@ export const readBankRows = (
   const ordinals = new Map<string, number>();
   let skipped = 0;
 
+  // 日付が年・月・日の3列に分かれている形(PayPay銀行)
+  const splitDate = index.transactionYear !== undefined;
   for (const { line, cells } of lines.slice(found.at + 1)) {
-    const dateText = cell(cells, "transactionOn");
+    const dateText = splitDate
+      ? [cell(cells, "transactionYear"), cell(cells, "transactionMonth"), cell(cells, "transactionDay")].some((v) => v === "")
+        ? ""
+        : `${cell(cells, "transactionYear")}/${cell(cells, "transactionMonth")}/${cell(cells, "transactionDay")}`
+      : cell(cells, "transactionOn");
     // 合計の行などは読み飛ばす
     if (dateText === "" && cells.some((c) => format.skipKeywords.some((k) => c.includes(k)))) {
       skipped += 1;
@@ -207,8 +258,18 @@ export const readBankRows = (
       errors.push({ line, message: `${line}行目: 日付が正しくありません。` });
       continue;
     }
-    const deposit = parseBankAmount(cell(cells, "deposit"));
-    const withdrawal = parseBankAmount(cell(cells, "withdrawal"));
+    // 入出金が符号つきの1列の形(楽天銀行)は、プラスを入金・マイナスを出金にする(0・読めない値はエラー)
+    let deposit: number | null;
+    let withdrawal: number | null;
+    if (index.signedAmount !== undefined) {
+      const signed = parseBankBalance(cell(cells, "signedAmount"));
+      const ok = typeof signed === "number" && Math.abs(signed) <= MAX_AMOUNT;
+      deposit = ok && signed > 0 ? signed : ok ? 0 : null;
+      withdrawal = ok && signed < 0 ? -signed : ok ? 0 : null;
+    } else {
+      deposit = parseBankAmount(cell(cells, "deposit"));
+      withdrawal = parseBankAmount(cell(cells, "withdrawal"));
+    }
     if (deposit === null || withdrawal === null || (deposit > 0) === (withdrawal > 0)) {
       errors.push({ line, message: `${line}行目: 金額が読み取れません。` });
       continue;
