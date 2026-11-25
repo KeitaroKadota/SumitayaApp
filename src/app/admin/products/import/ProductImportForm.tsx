@@ -14,11 +14,18 @@ import type { PlannedRowKind } from "@/utils/productCsv";
 import { cancelProductImport } from "./actions";
 import type { ProductImportPreview, ProductImportResponse } from "./importTypes";
 
-const KIND_LABELS: Record<PlannedRowKind, string> = { add: "追加", update: "更新", same: "変更なし", error: "エラー" };
+const KIND_LABELS: Record<PlannedRowKind, string> = {
+  add: "追加",
+  update: "更新",
+  same: "変更なし",
+  skip: "対象なし",
+  error: "エラー",
+};
 const TABS = [
   { key: "all", label: "すべて" },
   { key: "add", label: "追加" },
   { key: "update", label: "更新" },
+  { key: "skip", label: "対象なし" },
   { key: "error", label: "エラー" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -113,6 +120,9 @@ export function ProductImportForm({ columnsText }: { columnsText: string }) {
           />
         </Field>
         <p className="text-xs text-ink-muted">※空欄の項目は「変更しない」として扱います。ファイルは4MBまでです。</p>
+        <p className="text-xs text-ink-muted">
+          ※CROSS MALL の在庫CSV・商品マスタCSVも、そのまま選べます（見出しで形を見分けます）。先に在庫CSVで商品（SKU）を登録し、そのあと商品マスタCSVで原価・売価・税率を入れてください。
+        </p>
         <div className="flex justify-end">
           <Button disabled={busy !== null} onClick={() => run("preview")}>
             {busy === "preview" ? "確認中…" : "内容を確認する"}
@@ -126,9 +136,12 @@ export function ProductImportForm({ columnsText }: { columnsText: string }) {
           <h2 className="text-lg font-bold">
             {preview.fileName}（{preview.encodingLabel}・{formatQuantity(preview.dataRowCount)}行）
           </h2>
+          <p className="text-sm">読み取った形: {preview.formatLabel}</p>
           <p className="text-sm tabular-nums">
             追加 {formatQuantity(preview.counts.add)}件　更新 {formatQuantity(preview.counts.update)}件　変更なし{" "}
-            {formatQuantity(preview.counts.same)}件　エラー {formatQuantity(preview.counts.error)}件
+            {formatQuantity(preview.counts.same)}件
+            {preview.counts.skip > 0 && `　対象なし ${formatQuantity(preview.counts.skip)}件`}　エラー{" "}
+            {formatQuantity(preview.counts.error)}件
           </p>
           {preview.warnings.map((w) => (
             <Alert key={w} tone="warning">

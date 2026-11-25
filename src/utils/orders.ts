@@ -70,6 +70,8 @@ export type OrderImportPlan =
       cutoverDate: string | null;
       salesTargetCount: number;
       salesWarnings: string[];
+      // 注文日時の列が無いCSV(B-01-仮-23)。確認の画面に注意を出す
+      orderedAtMissing: boolean;
     }
   | { ok: false; error: string };
 
@@ -105,6 +107,8 @@ export const planOrderImport = async (header: string[], rows: CsvRow[]): Promise
     const productIds = e.order.items.map((i) => products.get(i.productCode)?.id ?? null);
     const current = existing.get(e.crossmallOrderNo);
     if (!current) return { ...e, kind: "add", productIds, previousOrderedOn: null };
+    // 注文日時の列が無いCSVでは、すでにある注文の注文日時を今の値のまま引き継ぐ(B-01 03 の 0.5 追記)
+    if (parsed.orderedAtMissing) e.order.orderedAt = current.ordered_at;
     // 元の行と、商品の結び付き(あとから商品マスタに足した場合)が同じなら「変更なし」
     const same =
       canonicalJson(current.raw_row) === canonicalJson(e.order.rawRows) &&
@@ -133,6 +137,7 @@ export const planOrderImport = async (header: string[], rows: CsvRow[]): Promise
     cutoverDate,
     salesTargetCount,
     salesWarnings,
+    orderedAtMissing: parsed.orderedAtMissing,
   };
 };
 

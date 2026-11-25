@@ -178,7 +178,14 @@ export type ParsedOrderEntry = {
 };
 
 export type ParsedOrderCsv =
-  | { ok: true; dataRowCount: number; unusedColumns: string[]; entries: ParsedOrderEntry[] }
+  | {
+      ok: true;
+      dataRowCount: number;
+      unusedColumns: string[];
+      entries: ParsedOrderEntry[];
+      // 注文日時の列が無いCSV(B-01-仮-23)。注文日時は取り込んだ日時にしてある(既存の注文は orders.ts で今の値に戻す)
+      orderedAtMissing: boolean;
+    }
   | { ok: false; error: string };
 
 type RowValues = {
@@ -190,7 +197,8 @@ type RowValues = {
   item: Omit<NormalizedOrderItem, "lineNo"> | null;
 };
 
-export const parseOrderCsv = (header: string[], rows: CsvRow[]): ParsedOrderCsv => {
+// importedAt: 注文日時の列が無いCSVで、新しい注文の注文日時にする時刻(取り込んだ日時。B-01-仮-23)
+export const parseOrderCsv = (header: string[], rows: CsvRow[], importedAt: Date = new Date()): ParsedOrderCsv => {
   // CH-02 必須の列
   const { index, unused } = resolve(header, ORDER_COLUMNS);
   const missing = ORDER_REQUIRED_FIELDS.filter((f) => index[f.field] === undefined).map((f) => f.label);
@@ -203,6 +211,7 @@ export const parseOrderCsv = (header: string[], rows: CsvRow[]): ParsedOrderCsv 
     return i === undefined ? "" : (r.cells[i] ?? "").trim();
   };
   const hasColumn = (f: OrderField) => index[f] !== undefined;
+  const orderedAtMissing = !hasColumn("orderedAt");
 
   const readRow = (r: CsvRow): RowValues => {
     const errors: string[] = [];
@@ -216,7 +225,8 @@ export const parseOrderCsv = (header: string[], rows: CsvRow[]): ParsedOrderCsv 
     // CH-03 受注番号・注文日時
     const crossmallOrderNo = cell(r, "crossmallOrderNo");
     if (!crossmallOrderNo) errors.push("受注番号がありません");
-    const orderedAt = parseJstDateTime(cell(r, "orderedAt"));
+    // 列が無いCSVは取り込んだ日時にする(B-01-仮-23)。列があって読めない・空はエラー
+    const orderedAt = orderedAtMissing ? importedAt : parseJstDateTime(cell(r, "orderedAt"));
     if (!orderedAt) errors.push(cell(r, "orderedAt") ? "注文日時の形が正しくありません" : "注文日時がありません");
 
     // CH-05 販路
@@ -269,8 +279,10 @@ export const parseOrderCsv = (header: string[], rows: CsvRow[]): ParsedOrderCsv 
     if (lineAmount === null) errors.push("金額が整数ではありません");
 
     if (productCode && typeof quantity === "number" && unitPrice !== null && lineAmount !== null) {
-      // CH-06 名入れ・加工
-      const optionText = orEmpty(cell(r, "optionText"));
+      // CH-06 名入れ・加工。選択項目の列が無いCSVは、属性1名・属性2名をつないで選択項目にする(B-01-仮-26)
+      const optionText = hasColumn("optionText")
+        ? orEmpty(cell(r, "optionText"))
+        : orEmpty([cell(r, "attribute1Name"), cell(r, "attribute2Name")].filter(Boolean).join(" ").slice(0, 2000));
       let hasCustomization = false;
       let customizationText: string | null = null;
       if (hasColumn("customization")) {
@@ -386,7 +398,7 @@ export const parseOrderCsv = (header: string[], rows: CsvRow[]): ParsedOrderCsv 
     });
   }
 
-  return { ok: true, dataRowCount: rows.length, unusedColumns: unused, entries };
+  return { ok: true, dataRowCount: rows.length, unusedColumns: unused, entries, orderedAtMissing };
 };
 
 // ---- 在庫CSV ----
@@ -432,11 +444,10 @@ export const parseStockCsv = (header: string[], rows: CsvRow[]): ParsedStockCsv 
       else firstLineByCode.set(productCode, r.line);
     }
 
-    // CH-04 在庫数: -99999〜99999(マイナスは警告)
+    // CH-04 在庫数: -99999〜99999。マイナスはすみたや様の「どこにも在庫がない」の印なので警告は出さない(B-01-仮-24)
     const quantity = parseInteger(cell(r, "quantity"), -MAX_QUANTITY, MAX_QUANTITY);
     if (quantity === "empty") errors.push("在庫数がありません");
     else if (quantity === null) errors.push(`在庫数は${-MAX_QUANTITY}〜${MAX_QUANTITY}の整数にしてください`);
-    else if (quantity < 0) warnings.push("在庫数がマイナスです");
 
     const optional = (f: StockField, label: string): number | null => {
       const n = parseInteger(cell(r, f), -MAX_QUANTITY, MAX_QUANTITY);

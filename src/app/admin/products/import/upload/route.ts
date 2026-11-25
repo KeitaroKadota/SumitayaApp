@@ -7,7 +7,7 @@ import { transaction } from "@/utils/db";
 import { ENCODING_LABELS } from "@/utils/csvImport/decode";
 import { readUploadedCsv } from "@/utils/csvImport/engine";
 import { createPreviewBatch, getBatch, lockBatch, markBatchApplied } from "@/utils/csvImport/batches";
-import { applyProductImport, planProductImport, previewRows } from "@/utils/productCsv";
+import { applyProductImport, planProductImport, previewRows, PRODUCT_CSV_FORMAT_LABELS } from "@/utils/productCsv";
 import { relinkSalesProducts } from "@/utils/salesRelink";
 import { revalidatePath } from "next/cache";
 import { checkPreviewBatch, PRODUCT_CSV_READ_OPTIONS } from "../importChecks";
@@ -83,7 +83,14 @@ export async function POST(request: Request) {
         fileName: read.fileName,
         encodingLabel: ENCODING_LABELS[read.encoding],
         dataRowCount: plan.dataRowCount,
-        counts: { add: plan.counts.add, update: plan.counts.change, same: plan.counts.same, error: plan.counts.error },
+        formatLabel: PRODUCT_CSV_FORMAT_LABELS[plan.format],
+        counts: {
+          add: plan.counts.add,
+          update: plan.counts.change,
+          same: plan.counts.same,
+          skip: plan.counts.skip,
+          error: plan.counts.error,
+        },
         unusedColumns: plan.unusedColumns,
         warnings: read.hasReplacementChar
           ? ["文字化けしているかもしれません。書き出したときの文字コードを確かめてください。"]

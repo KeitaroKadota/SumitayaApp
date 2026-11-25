@@ -46,6 +46,12 @@ const previewBody = (plan: Extract<OrderImportPlan, { ok: true }>) => {
   if (plan.cutoverDate)
     summary.push(`売上に積み上げる注文 ${formatQuantity(plan.salesTargetCount)}件（${formatDate(plan.cutoverDate)} 以後）`);
   const warnings: string[] = [];
+  // CH-03 注文日時の列が無いCSV(B-01-仮-23)
+  if (plan.orderedAtMissing) {
+    warnings.push(
+      "このCSVには注文日時の列がありません。新しい注文の注文日時は「取り込んだ日時」にします（すでにある注文は今の注文日時のままです）。"
+    );
+  }
   // CH-08 商品マスタに無い商品コード(登録はできる)
   if (plan.unknownProductCodes.length > 0) {
     const shown = plan.unknownProductCodes.slice(0, 10).join("、");

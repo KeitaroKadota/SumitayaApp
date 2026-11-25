@@ -53,6 +53,7 @@ type ItemRow = {
   option_text: string | null;
   has_customization: boolean;
   customization_text: string | null;
+  crossmall_remark: string | null;
 };
 
 export type DetectResult = {
@@ -75,8 +76,10 @@ const detectChunk = async (ids: string[]): Promise<DetectResult> => {
   if (orders.length === 0) return { checked: 0, exceptionOrders: 0, newExceptions: 0 };
   const items = await query(
     (sql) => sql<ItemRow[]>`
-      select order_id, line_no, product_id, product_code, product_name, option_text, has_customization, customization_text
-      from order_items where order_id = any(${ids}::uuid[]) order by order_id, line_no`
+      select i.order_id, i.line_no, i.product_id, i.product_code, i.product_name, i.option_text, i.has_customization,
+             i.customization_text, p.crossmall_remark
+      from order_items i left join products p on p.id = i.product_id
+      where i.order_id = any(${ids}::uuid[]) order by i.order_id, i.line_no`
   );
   // 同梱のルール(CH-04 の2)のため、同じ電話番号の未出荷・キャンセルでない注文を読む(名前はこちらで比べる)
   const phones = [...new Set(orders.map((o) => o.customer_phone_digits).filter((p): p is string => Boolean(p)))];
@@ -130,6 +133,7 @@ const detectChunk = async (ids: string[]): Promise<DetectResult> => {
           optionText: i.option_text,
           hasCustomization: i.has_customization,
           customizationText: i.customization_text,
+          crossmallRemark: i.crossmall_remark,
         })),
       sameCustomerOpenOrderNos: key ? (openByCustomer.get(key) ?? []).filter((x) => x.id !== o.id).map((x) => x.no) : [],
     };

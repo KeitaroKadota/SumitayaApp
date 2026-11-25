@@ -6,7 +6,9 @@ export type ProductImportPreview = {
   fileName: string;
   encodingLabel: string;
   dataRowCount: number;
-  counts: { add: number; update: number; same: number; error: number };
+  // 読み取った形(ひな形・CROSS MALL の在庫CSV・商品マスタCSV。CMN-02 04 CH-21)
+  formatLabel: string;
+  counts: { add: number; update: number; same: number; skip: number; error: number };
   unusedColumns: string[];
   // 文字化けしているかもしれないときの注意(A-01 CH-03)
   warnings: string[];

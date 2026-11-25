@@ -46,14 +46,22 @@ const BANCHI_PATTERN = /[0-9]|[一二三四五六七八九十百千]+(丁目|番
 // CH-16〜CH-19 商品を見分ける印
 export type ProductKind = "scroll360" | "custom" | "made_to_order" | "maker_order";
 
-// 【仮】商品の印の出どころは未決(B-02-未-03。CMN-02 01 6.2)。決まるまでは、どの商品にも印を付けない
-// (= CH-16〜CH-19 は当たらない。00_仮決め一覧 B-02-仮-13)。
-// 決まったら、この関数の中身を「商品マスタの列」「スクロール360の在庫データにあるか」「商品コード・分類の決まり」などで直す
-// (商品マスタの列を使うなら、orderExceptions.ts の明細を読む SQL にその列を足して、ここへ渡す)。
+// スクロール360の商品: CROSS MALL の商品備考が「s_」で始まる(すみたや様の提出資料の説明。00_仮決め一覧 B-02-仮-19)
+const SCROLL360_REMARK_PREFIX = "s_";
+
+// 商品の印(B-02 04 の 0.5 追記)。スクロール360は商品備考の写しで見分ける。
+// 【仮】特注・受注生産・メーカー取り寄せの印は未決のまま付けない(= CH-17〜CH-19 は当たらない。B-02-未-03・B-02-仮-13)。
 // 商品マスタに結び付いていない明細(productId が空)は、印の無い商品として扱う(04 CH-16〜CH-19 共通)。
-export const productKindsOf = (item: { productId: string | null; productCode: string; productName: string }): ProductKind[] => {
+export const productKindsOf = (item: {
+  productId: string | null;
+  productCode: string;
+  productName: string;
+  crossmallRemark: string | null;
+}): ProductKind[] => {
   if (!item.productId) return [];
-  return [];
+  const kinds: ProductKind[] = [];
+  if (item.crossmallRemark?.trim().startsWith(SCROLL360_REMARK_PREFIX)) kinds.push("scroll360");
+  return kinds;
 };
 
 // ---- 文字の比べ方(04「文字の比べ方」) ----
@@ -101,6 +109,8 @@ export type ExceptionOrderItem = {
   optionText: string | null;
   hasCustomization: boolean;
   customizationText: string | null;
+  // 商品マスタの CROSS MALL の商品備考の写し(products.crossmall_remark。未登録の商品は null)
+  crossmallRemark: string | null;
 };
 
 export type ExceptionOrderInput = {
@@ -174,6 +184,10 @@ export const ORDER_EXCEPTION_CHECKS: Record<OrderExceptionRule, RuleCheck> = {
 
   // CH-02 住所の不備(当たった項目をすべて書く)
   address: (order) => {
+    // 届け先の項目がすべて空の注文は、住所を取り込んでいない(CSVに届け先の列が無い・店舗の注文)とみなして調べない
+    // (B-01 01 11.1。見本の受注CSVには届け先の列が無く、すべての注文が当たってしまうため)
+    const shipFields = [order.shipName, order.shipPostalCode, order.shipPrefecture, order.shipAddress1, order.shipAddress2, order.shipPhone];
+    if (shipFields.every((v) => !(v ?? "").trim())) return null;
     const problems: string[] = [];
     const postal = digitsOf(order.shipPostalCode);
     if (!postal) problems.push("郵便番号がありません");
