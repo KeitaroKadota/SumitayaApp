@@ -5,8 +5,17 @@ import { canAccess, type FeatureKey, type Role } from "@/utils/permissions";
 // 例: { group: "マスタ", href: "/admin/employees", label: "従業員", feature: "employees" }
 
 // feature を並びで書いたときは、どれか1つでも使えれば出す(B-01 の在庫の一覧は orders か inventory)
-// badge: 件数のバッジを出す項目(数は layout が求めて渡す。00_画面共通ルール 5.2)
-export type AdminMenuBadge = "payables_review" | "deposits_unmatched";
+// badge: 件数のバッジを出す項目(数は layout が src/utils/adminCounts.ts で求めて渡す。00_画面共通ルール 5.2)。
+// 管理画面のトップの「確認が必要なこと」のカードと同じ6つ(CMN-01 G05。2026-11-25)
+export const ADMIN_COUNT_KEYS = [
+  "inquiries_open",
+  "exceptions_open",
+  "receiving_review",
+  "payables_review",
+  "deposits_unmatched",
+  "attendance_alerts",
+] as const;
+export type AdminMenuBadge = (typeof ADMIN_COUNT_KEYS)[number];
 export type AdminMenuItem = {
   group: AdminMenuGroup;
   href: string;
@@ -31,11 +40,25 @@ export const ADMIN_MENU_GROUPS = [
 ] as const;
 export type AdminMenuGroup = (typeof ADMIN_MENU_GROUPS)[number];
 
+// 区切りの見出しの左に出す、事業計画書のエージェントの記号(CMN-01 G05。2026-11-25)。無い区切りは記号を出さない
+export const ADMIN_MENU_GROUP_MARKS: Partial<Record<AdminMenuGroup, string>> = {
+  "売上・発注": "A",
+  "受注・在庫": "B",
+  "仕入・検収": "C",
+  "問い合わせ": "D",
+  "請求・支払": "E",
+  "勤怠・給与": "E",
+  "経費": "E",
+};
+
+// 区切りの見出しを出さず、項目をそのまま並べる区切り(「ホーム」の下の「全員のタスク」)
+export const FLAT_MENU_GROUPS: readonly AdminMenuGroup[] = ["タスク"];
+
 const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // CMN-03 タスク・通知(02 の G03)
   { group: "タスク", href: "/admin/tasks", label: "全員のタスク", feature: "tasks_admin" },
   // D-01 問い合わせの取り込み・分類(02 の G01)
-  { group: "問い合わせ", href: "/admin/inquiries", label: "問い合わせ", feature: "inquiries" },
+  { group: "問い合わせ", href: "/admin/inquiries", label: "問い合わせ", feature: "inquiries", badge: "inquiries_open" },
   // D-02 在庫照会への回答(02 の G02。返信のひな形は D-03・D-04・D-06 の分もここで管理する)
   { group: "問い合わせ", href: "/admin/inquiries/templates", label: "返信のひな形", feature: "inquiry_settings" },
   // D-03 よくある質問への回答(02 の G02)
@@ -48,7 +71,7 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // B-01 CROSS MALL からの受注・在庫の取り込み(02 の G01・G05)
   { group: "受注・在庫", href: "/admin/orders", label: "受注", feature: "orders" },
   // B-02 例外注文の抽出(02 の G01)
-  { group: "受注・在庫", href: "/admin/orders/exceptions", label: "例外注文", feature: "orders" },
+  { group: "受注・在庫", href: "/admin/orders/exceptions", label: "例外注文", feature: "orders", badge: "exceptions_open" },
   { group: "受注・在庫", href: "/admin/inventory", label: "在庫", feature: ["orders", "inventory"] },
   // A-01 売上データの取り込み・A-02 ABC分析・A-03 需要予測・発注の提案・A-05 在庫指標(各 02 の画面一覧)
   { group: "売上・発注", href: "/admin/sales", label: "売上", feature: "sales" },
@@ -62,7 +85,7 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   { group: "仕入・検収", href: "/admin/purchasing/slips", label: "納品書", feature: "purchasing" },
   { group: "仕入・検収", href: "/admin/purchasing/item-codes", label: "品番の対応表", feature: "purchasing" },
   // C-02 発注との照合・検収(02 の G01)
-  { group: "仕入・検収", href: "/admin/purchasing/receiving", label: "検収", feature: "purchasing" },
+  { group: "仕入・検収", href: "/admin/purchasing/receiving", label: "検収", feature: "purchasing", badge: "receiving_review" },
   // E-04 受け取った請求書の読み取り・支払予定(02 の画面一覧。「受け取った請求書」には確認待ちの件数を出す)
   { group: "請求・支払", href: "/admin/payables", label: "受け取った請求書", feature: "payables", badge: "payables_review" },
   { group: "請求・支払", href: "/admin/payables/schedule", label: "支払予定", feature: "payables" },
@@ -73,7 +96,7 @@ const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
   // E-02 勤怠チェック・シフトとの突合(02 の画面一覧)
   { group: "勤怠・給与", href: "/admin/attendance", label: "勤怠の一覧", feature: "attendance_admin" },
   { group: "勤怠・給与", href: "/admin/attendance/shifts", label: "シフト", feature: "attendance_admin" },
-  { group: "勤怠・給与", href: "/admin/attendance/alerts", label: "勤怠の異常", feature: "attendance_admin" },
+  { group: "勤怠・給与", href: "/admin/attendance/alerts", label: "勤怠の異常", feature: "attendance_admin", badge: "attendance_alerts" },
   // E-03 給与CSVの出力(02 の G01)
   { group: "勤怠・給与", href: "/admin/payroll", label: "給与CSV", feature: "payroll" },
   // E-07 経費精算(02 の画面一覧。「経費 ＞ 一覧」。0.4 で承認待ちの件数は外した)

@@ -134,6 +134,16 @@ export const listInquiries = async (
   };
 };
 
+// 一覧の「対応中」(未対応・対応中・返事待ち)の件数。管理画面のトップのカードと左メニューの件数(CMN-01 G05)
+export const countOpenInquiries = async (): Promise<number> => {
+  const rows = await query(
+    (sql) => sql<{ n: number }[]>`
+      select count(*)::int as n from inquiries
+      where parent_inquiry_id is null and status in ('new', 'in_progress', 'waiting')`
+  );
+  return rows[0]?.n ?? 0;
+};
+
 // ---- EV-02・EV-03 取り込み ----
 
 export type ParentCandidate = { id: string; receivedAt: Date; subject: string | null; summary: string | null };
