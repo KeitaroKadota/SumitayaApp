@@ -28,7 +28,7 @@ const INVOICE_SHEET_CSS = `
 .iv-issuer { font-size: 12px; line-height: 1.7; text-align: left; min-width: 62mm; }
 .iv-issuer .name { font-size: 15px; font-weight: 700; }
 .iv-lead { font-size: 13px; }
-.iv-total { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; background: #f3f1ee; padding: 12px 20px; }
+.iv-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; background: #f3f1ee; padding: 12px 20px; }
 .iv-total .lbl { font-size: 14px; }
 .iv-total .amt { font-size: 26px; font-weight: 700; }
 .iv-total .due { font-size: 13px; margin-left: auto; }
@@ -44,9 +44,11 @@ table.iv-table .nw { white-space: nowrap; }
 .iv-sums .row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; }
 .iv-sums .grand { border-top: 1.5px solid #1f1f1f; margin-top: 4px; padding-top: 4px; font-weight: 700; font-size: 14px; }
 .iv-mark { font-size: 11.5px; }
-.iv-pay { border: 1px solid #d6d3cf; padding: 10px 16px; font-size: 12px; line-height: 1.8; break-inside: avoid; }
-.iv-pay .ttl { font-weight: 600; }
-.iv-note { font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.iv-greeting { font-size: 12.5px; line-height: 1.8; margin-top: 8px; }
+.iv-bottom { display: flex; gap: 12px; align-items: stretch; break-inside: avoid; }
+.iv-box { flex: 1 1 0; border: 1px solid #d6d3cf; padding: 10px 16px; font-size: 12px; line-height: 1.8; }
+.iv-box .ttl { font-weight: 600; }
+.iv-note { font-size: 12px; white-space: pre-wrap; word-break: break-word; margin-top: 4px; }
 .iv-empty { max-width: 210mm; margin: 24px auto; font-size: 14px; }
 .iv-watermark {
   position: absolute; left: 0; right: 0; top: 90mm; display: flex; justify-content: center; pointer-events: none; z-index: 10;

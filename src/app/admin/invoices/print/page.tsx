@@ -1,13 +1,16 @@
 import { requireAccess } from "@/utils/auth";
 import { formatDateShort, formatJaDate, formatQuantity, parseIdList } from "@/utils/format";
 import {
+  PAYMENT_GUIDE_LINES,
   PRINT_MAX_INVOICES,
   addresseeOf,
   bankTextOf,
   calcInvoiceTotals,
   formatInvoiceQty,
+  hasShipTo,
   invoiceNoLabel,
   pdfFileName,
+  postalTransferTextOf,
   taxSummaryRows,
   type TotalsView,
 } from "@/utils/invoices";
@@ -25,6 +28,7 @@ import { PrintButton } from "@/components/PrintButton";
 // G03 請求書の印刷(E-05 03 EV-07。A4縦・1件1枚・PDFはブラウザの印刷で保存)。読むだけでデータは変えない。
 // 一覧の「選んだものを印刷する」、G02 の「印刷して確認する」「印刷する」から新しいタブで開く(?ids=id,…)。
 // 発行済み・取消は請求書に写した値で、下書きは今の取引先・自社の情報で作る(0.3 と同じ項目)。
+// 2026-11-25: すみたや様の請求書のひな形(税込版・税抜版)の並びに合わせた(E-05 01 の 11章)。
 // 管理画面の左メニューは出さない(AdminSidebar が /print で終わるパスでは何も出さない)。
 export default async function InvoicePrintPage({ searchParams }: PageProps<"/admin/invoices/print">) {
   const params = await searchParams;
@@ -84,7 +88,9 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
                 postalCode: company?.postalCode ?? null,
                 address: company?.address ?? null,
                 tel: company?.tel ?? null,
+                fax: company?.fax ?? null,
                 bankText: bankTextOf(company),
+                postalTransferText: postalTransferTextOf(company),
               }
             : {
                 name: invoice.issuerName,
@@ -92,16 +98,23 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
                 postalCode: invoice.issuerPostalCode,
                 address: invoice.issuerAddress,
                 tel: invoice.issuerTel,
+                fax: invoice.issuerFax,
                 bankText: invoice.bankText,
+                postalTransferText: invoice.postalTransferText,
               };
           // 手順4: 金額は保存した値(下書きは計算し直した値)
           const input = toInvoiceInput(invoice, lines);
           const calc = draft ? calcInvoiceTotals(input.lines, input.priceBasis, currentRounding(company)) : null;
           const totals: TotalsView = calc ?? invoice;
           const amounts = calc ? calc.amounts : lines.map((l) => l.amount);
-          const basisLabel = invoice.priceBasis === "inclusive" ? "税込" : "税抜";
+          const inclusive = invoice.priceBasis === "inclusive";
+          const basisLabel = inclusive ? "税込" : "税抜";
           const showPeriod = Boolean(invoice.periodStart && invoice.periodEnd);
+          const showLineDate = lines.some((l) => l.transactionOn);
           const hasReduced = lines.some((l) => l.taxRate === 8);
+          // 10％だけの請求書はひな形どおり「消費税（税率10%）」。8％・0％があるときは税率ごとの行も出す
+          const onlyTen = totals.subtotal8 === 0 && totals.tax8 === 0 && totals.subtotalExempt === 0;
+          const taxLabel = onlyTen ? "（税率10%）" : "";
           // 手順5: 透かし(CH-15)
           const watermark = draft ? "下書き" : invoice.status === "void" ? "取消" : null;
 
@@ -113,9 +126,9 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
                 </div>
               )}
               <div className="iv-head">
-                <h1>請求書</h1>
+                <h1>ご請求書</h1>
                 <div className="iv-small">
-                  No. {invoiceNoLabel(invoice.status, invoice.invoiceNo)}
+                  伝票番号 {invoiceNoLabel(invoice.status, invoice.invoiceNo)}
                   <br />
                   発行日 {invoice.issuedOn ? formatJaDate(invoice.issuedOn) : "−"}
                   {watermark && (
@@ -132,22 +145,28 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
                   {to.address && <div>{to.address}</div>}
                   <div className="iv-to">{addresseeOf(to.name, to.honorific)}</div>
                   {to.contact && <div className="iv-contact">ご担当 {to.contact}様</div>}
+                  <div className="iv-greeting">
+                    この度はご注文ありがとうございます。
+                    <br />
+                    下記の通りご請求申し上げます。
+                  </div>
                 </div>
                 <div className="iv-issuer">
                   {issuer.name && <div className="name">{issuer.name}</div>}
                   {issuer.postalCode && <div>〒{issuer.postalCode}</div>}
                   {issuer.address && <div>{issuer.address}</div>}
-                  {issuer.tel && <div>TEL {issuer.tel}</div>}
-                  {issuer.registrationNo && <div>登録番号 {issuer.registrationNo}</div>}
+                  {issuer.tel && <div>TEL：{issuer.tel}</div>}
+                  {issuer.fax && <div>FAX：{issuer.fax}</div>}
+                  {issuer.registrationNo && <div>登録番号：{issuer.registrationNo}</div>}
                 </div>
               </div>
 
               {invoice.subject && <div className="iv-lead">件名: {invoice.subject}</div>}
-              <div className="iv-lead">下記のとおりご請求申し上げます。</div>
               <div className="iv-total">
-                <div className="lbl">ご請求金額（税込）</div>
-                <div className="amt">¥{formatQuantity(totals.total)}</div>
-                {invoice.dueOn && <div className="due">お支払期限 {formatJaDate(invoice.dueOn)}</div>}
+                <div className="lbl">ご請求金額合計：</div>
+                <div className="amt">{formatQuantity(totals.total)}</div>
+                <div className="lbl">円（税込）</div>
+                {invoice.dueOn && <div className="due">お支払い期限 {formatJaDate(invoice.dueOn)}</div>}
               </div>
 
               {showPeriod && invoice.periodStart && invoice.periodEnd && (
@@ -158,8 +177,9 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
               <table className="iv-table">
                 <thead>
                   <tr>
-                    <th style={{ width: 80 }}>日付</th>
-                    <th>品名</th>
+                    {showLineDate && <th style={{ width: 70 }}>日付</th>}
+                    <th>品目名</th>
+                    <th>摘要</th>
                     <th className="r" style={{ width: 70 }}>
                       数量
                     </th>
@@ -167,66 +187,99 @@ export default async function InvoicePrintPage({ searchParams }: PageProps<"/adm
                       単価（{basisLabel}）
                     </th>
                     <th className="r" style={{ width: 90 }}>
-                      金額（{basisLabel}）
-                    </th>
-                    <th className="r" style={{ width: 50 }}>
-                      税率
+                      計
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((l, i) => (
                     <tr key={l.id}>
-                      <td className="nw">{l.transactionOn ? formatDateShort(l.transactionOn) : "−"}</td>
+                      {showLineDate && <td className="nw">{l.transactionOn ? formatDateShort(l.transactionOn) : "−"}</td>}
                       <td>
                         {l.description}
                         {l.taxRate === 8 && "※"}
+                        {l.taxRate === 0 && "（対象外）"}
                       </td>
+                      <td>{l.remark}</td>
                       <td className="r">{formatInvoiceQty(l.quantity100, l.unit ?? "")}</td>
                       <td className="r">{l.unitPrice === null ? "−" : formatQuantity(l.unitPrice)}</td>
                       <td className="r">{formatQuantity(amounts[i] ?? 0)}</td>
-                      <td className="r">{l.taxRate}%</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
-              {/* 税率ごとの合計と消費税額(01 9.1 の 4・5) */}
+              {/* 合計の並びはひな形どおり(税込で入力: 合計→税抜き金額→消費税額、税抜で入力: 小計→消費税→合計)。
+                  8％・0％があるときは、税率ごとの合計と消費税額も出す(インボイスの記載事項。01 9.1 の 4・5) */}
               <div className="iv-sums">
-                {taxSummaryRows(totals, invoice.priceBasis).map((r) => (
-                  <div key={r.key} className="row">
-                    <span>
-                      {r.label} {formatQuantity(r.amount)}円{r.amountNote}
-                    </span>
-                    {r.taxLabel && (
+                {!onlyTen &&
+                  taxSummaryRows(totals, invoice.priceBasis).map((r) => (
+                    <div key={r.key} className="row">
                       <span>
-                        {r.taxLabel} {formatQuantity(r.tax ?? 0)}円
+                        {r.label} {formatQuantity(r.amount)}円{r.amountNote}
                       </span>
-                    )}
-                  </div>
-                ))}
-                <div className="row">
-                  <span>合計（税抜）</span>
-                  <span>{formatQuantity(totals.subtotal)}円</span>
-                </div>
-                <div className="row">
-                  <span>消費税</span>
-                  <span>{formatQuantity(totals.tax)}円</span>
-                </div>
-                <div className="row grand">
-                  <span>ご請求金額</span>
-                  <span>{formatQuantity(totals.total)}円（税込）</span>
-                </div>
+                      {r.taxLabel && (
+                        <span>
+                          {r.taxLabel} {formatQuantity(r.tax ?? 0)}円
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                {inclusive ? (
+                  <>
+                    <div className="row grand">
+                      <span>合計（税込価格）</span>
+                      <span>{formatQuantity(totals.total)}円</span>
+                    </div>
+                    <div className="row">
+                      <span>税抜き金額</span>
+                      <span>{formatQuantity(totals.subtotal)}円</span>
+                    </div>
+                    <div className="row">
+                      <span>消費税額{taxLabel}</span>
+                      <span>{formatQuantity(totals.tax)}円</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="row">
+                      <span>小計（税抜価格）</span>
+                      <span>{formatQuantity(totals.subtotal)}円</span>
+                    </div>
+                    <div className="row">
+                      <span>消費税{taxLabel}</span>
+                      <span>{formatQuantity(totals.tax)}円</span>
+                    </div>
+                    <div className="row grand">
+                      <span>合計（税込価格）</span>
+                      <span>{formatQuantity(totals.total)}円</span>
+                    </div>
+                  </>
+                )}
               </div>
               {hasReduced && <div className="iv-mark">※は軽減税率（8％）対象です。</div>}
 
-              {issuer.bankText && (
-                <div className="iv-pay">
-                  <div className="ttl">お振込先</div>
-                  <div>{issuer.bankText}</div>
+              {/* お届け先(左)と備考(右)。ひな形の下の欄 */}
+              <div className="iv-bottom">
+                {hasShipTo(invoice.shipTo) && (
+                  <div className="iv-box">
+                    <div className="ttl">お届け先</div>
+                    {invoice.shipTo.postalCode && <div>〒{invoice.shipTo.postalCode}</div>}
+                    {invoice.shipTo.address && <div>{invoice.shipTo.address}</div>}
+                    {invoice.shipTo.name && <div>{invoice.shipTo.name} 様</div>}
+                    {invoice.shipTo.tel && <div>電話番号 {invoice.shipTo.tel}</div>}
+                  </div>
+                )}
+                <div className="iv-box">
+                  <div className="ttl">備考</div>
+                  {PAYMENT_GUIDE_LINES.map((t) => (
+                    <div key={t}>{t}</div>
+                  ))}
+                  {issuer.bankText && <div>{issuer.bankText}</div>}
+                  {issuer.postalTransferText && <div>{issuer.postalTransferText}</div>}
+                  {invoice.note && <div className="iv-note">{invoice.note}</div>}
                 </div>
-              )}
-              {invoice.note && <div className="iv-note">備考: {invoice.note}</div>}
+              </div>
             </section>
           );
         })

@@ -31,8 +31,10 @@ export const isRounding = (v: string): v is Rounding => Object.hasOwn(ROUNDINGS,
 export const DEFAULT_PRICE_BASIS: PriceBasis = "exclusive";
 // 【仮】自社の情報の行が無いときの下書きの計算に使う端数処理(company_settings の初期値と同じ。E-05-仮-01)
 export const DEFAULT_ROUNDING: Rounding = "floor";
-// 【仮】請求書の決まった備考。新しい請求書の備考の初期値にする(00_仮決め一覧 E-05-仮-08)
-export const INVOICE_NOTE = "振込手数料はご負担くださいますようお願いいたします。";
+// 新しい請求書の備考の初期値。振込の決まった文は印刷の備考の欄に毎回出すので空にした(00_仮決め一覧 E-05-仮-17)
+export const INVOICE_NOTE = "";
+// 印刷の備考の欄に毎回出す決まった文(すみたや様のひな形。E-05 01 の 11章)
+export const PAYMENT_GUIDE_LINES = ["下記口座までお振込みお願いいたします。", "お振込み手数料はお客様ご負担でお願いいたします。"] as const;
 // 新しい明細の税率の初期値(01 9.2。商品から選んだときは商品の税率)
 export const DEFAULT_TAX_RATE: TaxRate = 10;
 
@@ -46,6 +48,11 @@ export const ISSUE_RETRY = 3;
 export const INVOICE_LIMITS = {
   lines: 100,
   description: 100,
+  remark: 100,
+  shipToName: 100,
+  shipToPostalCode: 10,
+  shipToAddress: 200,
+  shipToTel: 20,
   subject: 100,
   note: 1000,
   unit: 10,
@@ -234,9 +241,9 @@ export const taxSummaryRows = (t: TotalsView, basis: PriceBasis): TaxSummaryRow[
 
 // ---- 請求書番号(CH-12) ----
 
-// 発行日の年月(YYYYMM)
-export const invoiceNoPrefix = (issuedOn: string): string => issuedOn.slice(0, 7).replace("-", "");
-// 202611-003
+// 「INV-」＋発行日(YYYYMMDD)。すみたや様のひな形の伝票番号の形(E-05 04 の 0.5 追記 CH-12。E-05-仮-16)
+export const invoiceNoPrefix = (issuedOn: string): string => `INV-${issuedOn.slice(0, 10).replace(/-/g, "")}`;
+// INV-20261125-001(その日の連番)
 export const formatInvoiceNo = (issuedOn: string, seq: number): string => `${invoiceNoPrefix(issuedOn)}-${String(seq).padStart(3, "0")}`;
 export const INVOICE_NO_MAX_SEQ = 999;
 
@@ -255,7 +262,15 @@ export type CompanySettings = {
   bankAccountType: string | null;
   bankAccountNo: string | null;
   bankAccountHolder: string | null;
+  // 郵便振替の口座番号(例 12370-46186061。0048)
+  postalTransferNo: string | null;
   rounding: Rounding;
+};
+
+// 郵便振替の文(「郵便振替 12370-46186061」)。空なら null
+export const postalTransferTextOf = (c: CompanySettings | null): string | null => {
+  const no = (c?.postalTransferNo ?? "").trim();
+  return no ? `郵便振替 ${no}` : null;
 };
 
 // 振込先の文(「〇〇銀行 〇〇支店 普通 1234567 カ）マツリスミタヤ」)。空なら null
@@ -294,6 +309,8 @@ export type InvoiceLineInput = {
   transactionOn: string | null;
   productId: string | null;
   description: string;
+  // 摘要(ひな形の列。0048)
+  remark: string | null;
   quantity100: number | null;
   unit: string | null;
   unitPrice: number | null;
@@ -309,8 +326,14 @@ export type InvoiceInput = {
   dueOn: string | null;
   priceBasis: PriceBasis;
   note: string | null;
+  // お届け先(ひな形の欄。空でよい。0048)
+  shipTo: ShipTo;
   lines: InvoiceLineInput[];
 };
+
+export type ShipTo = { name: string | null; postalCode: string | null; address: string | null; tel: string | null };
+export const EMPTY_SHIP_TO: ShipTo = { name: null, postalCode: null, address: null, tel: null };
+export const hasShipTo = (s: ShipTo): boolean => Boolean(s.name || s.postalCode || s.address || s.tel);
 
 export type InvoiceFormResult = { ok: true; input: InvoiceInput } | { ok: false; errors: Record<string, string> };
 
@@ -347,6 +370,12 @@ export const parseInvoiceForm = (values: Record<string, string>): InvoiceFormRes
   if (!isPriceBasis(basisRaw)) errors.price_basis = "単価の入力（税抜・税込）を選んでください。";
   const priceBasis: PriceBasis = isPriceBasis(basisRaw) ? basisRaw : DEFAULT_PRICE_BASIS;
   const note = str("note", INVOICE_LIMITS.note, "備考");
+  const shipTo: ShipTo = {
+    name: str("ship_to_name", INVOICE_LIMITS.shipToName, "お届け先の名前"),
+    postalCode: str("ship_to_postal_code", INVOICE_LIMITS.shipToPostalCode, "お届け先の郵便番号"),
+    address: str("ship_to_address", INVOICE_LIMITS.shipToAddress, "お届け先の住所"),
+    tel: str("ship_to_tel", INVOICE_LIMITS.shipToTel, "お届け先の電話番号"),
+  };
 
   // 明細: 空の行(品名・数量・単価がすべて空)は捨てる(CH-05)
   const count = Math.min(Number(text(values, "line_count")) || 0, INVOICE_LIMITS.lines + 50);
@@ -365,6 +394,8 @@ export const parseInvoiceForm = (values: Record<string, string>): InvoiceFormRes
     if (price !== null && typeof price === "object") errors[k("price")] = `${no}行目: ${price.error}`;
     const unit = text(values, k("unit"));
     if (unit.length > INVOICE_LIMITS.unit) errors[k("unit")] = `${no}行目の${maxText("単位", INVOICE_LIMITS.unit)}`;
+    const remark = text(values, k("remark"));
+    if (remark.length > INVOICE_LIMITS.remark) errors[k("remark")] = `${no}行目の${maxText("摘要", INVOICE_LIMITS.remark)}`;
     const rate = Number(text(values, k("rate")));
     if (!isTaxRate(rate)) errors[k("rate")] = `${no}行目の税率を選んでください。`;
     const lineDateRaw = text(values, k("date")).replace(/\//g, "-");
@@ -378,6 +409,7 @@ export const parseInvoiceForm = (values: Record<string, string>): InvoiceFormRes
       transactionOn,
       productId: /^[0-9a-f-]{36}$/i.test(productId) ? productId : null,
       description: desc,
+      remark: remark || null,
       quantity100: typeof qty === "number" ? qty : null,
       unit: unit || null,
       unitPrice: typeof price === "number" ? price : null,
@@ -393,7 +425,7 @@ export const parseInvoiceForm = (values: Record<string, string>): InvoiceFormRes
   });
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  return { ok: true, input: { customerId, subject, issuedOn, periodStart, periodEnd, dueOn, priceBasis, note, lines } };
+  return { ok: true, input: { customerId, subject, issuedOn, periodStart, periodEnd, dueOn, priceBasis, note, shipTo, lines } };
 };
 
 // ---- CH-09 発行できる条件(CH-02〜CH-05・CH-08) ----

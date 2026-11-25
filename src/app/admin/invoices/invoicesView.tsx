@@ -87,6 +87,13 @@ export function InvoiceReadOnly({ invoice, lines }: { invoice: Invoice; lines: I
           {invoice.customerAddress && <p className="break-words">{invoice.customerAddress}</p>}
           {invoice.customerContact && <p>ご担当 {invoice.customerContact}様</p>}
           <p>件名: {invoice.subject ?? "−"}</p>
+          {(invoice.shipTo.name || invoice.shipTo.address) && (
+            <p className="break-words">
+              お届け先: {[invoice.shipTo.postalCode && `〒${invoice.shipTo.postalCode}`, invoice.shipTo.address, invoice.shipTo.name, invoice.shipTo.tel]
+                .filter(Boolean)
+                .join(" ")}
+            </p>
+          )}
         </section>
         <section className="flex flex-col gap-1 rounded-lg border border-line bg-surface p-4 text-sm">
           <h2 className="mb-1 font-bold">日付</h2>
@@ -103,6 +110,7 @@ export function InvoiceReadOnly({ invoice, lines }: { invoice: Invoice; lines: I
             <tr>
               <th className="px-3 py-2">日付</th>
               <th className="px-3 py-2">品名</th>
+              <th className="px-3 py-2">摘要</th>
               <th className="px-3 py-2 text-right">数量</th>
               <th className="px-3 py-2 text-right">単価（{basisLabel}・円）</th>
               <th className="px-3 py-2 text-right">金額（{basisLabel}・円）</th>
@@ -117,6 +125,7 @@ export function InvoiceReadOnly({ invoice, lines }: { invoice: Invoice; lines: I
                   {l.description}
                   {l.taxRate === 8 && "※"}
                 </td>
+                <td className="px-3 py-2 break-words">{l.remark ?? ""}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">{formatInvoiceQty(l.quantity100, l.unit ?? "")}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">{l.unitPrice === null ? "−" : formatQuantity(l.unitPrice)}</td>
                 <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">{formatQuantity(l.amount)}</td>

@@ -57,6 +57,8 @@ export type FormLine = {
   key: string;
   date: string;
   desc: string;
+  // 摘要(ひな形の列。E-05 01 の 11章)
+  remark: string;
   qty: string;
   unit: string;
   price: string;
@@ -75,10 +77,19 @@ type ProductHit = {
   taxRate: number;
 };
 
+// お届け先の入力欄(名前・ラベル・上限)
+const SHIP_TO_FIELDS = [
+  ["ship_to_name", "お届け先の名前", INVOICE_LIMITS.shipToName],
+  ["ship_to_postal_code", "郵便番号", INVOICE_LIMITS.shipToPostalCode],
+  ["ship_to_address", "住所", INVOICE_LIMITS.shipToAddress],
+  ["ship_to_tel", "電話番号", INVOICE_LIMITS.shipToTel],
+] as const;
+
 const emptyLine = (n: number): FormLine => ({
   key: `new-${Date.now()}-${n}`,
   date: "",
   desc: "",
+  remark: "",
   qty: "",
   unit: "",
   price: "",
@@ -261,6 +272,7 @@ export function InvoiceForm({
     lines.forEach((l, i) => {
       v[`l${i}_date`] = l.date;
       v[`l${i}_desc`] = l.desc;
+      v[`l${i}_remark`] = l.remark;
       v[`l${i}_qty`] = l.qty;
       v[`l${i}_unit`] = l.unit;
       v[`l${i}_price`] = l.price;
@@ -409,6 +421,22 @@ export function InvoiceForm({
                 placeholder="例: 秋祭り 法被一式"
               />
             </Field>
+            {/* お届け先(ひな形の欄。空なら印刷に出さない。E-05 01 の 11章) */}
+            <fieldset className="flex flex-col gap-3 border-t border-line pt-3">
+              <legend className="text-sm font-bold">お届け先（空でよい）</legend>
+              {SHIP_TO_FIELDS.map(([name, label, max]) => (
+                <Field key={name} id={`iv_${name}`} label={label} error={e[name]}>
+                  <TextInput
+                    id={`iv_${name}`}
+                    name={name}
+                    value={vals[name] ?? ""}
+                    onChange={(ev) => set(name, ev.currentTarget.value)}
+                    maxLength={max}
+                    invalid={!!e[name]}
+                  />
+                </Field>
+              ))}
+            </fieldset>
           </section>
 
           {/* 日付 */}
@@ -453,6 +481,7 @@ export function InvoiceForm({
                 <tr>
                   <th className="px-1 py-2">日付</th>
                   <th className="px-1 py-2">品名</th>
+                  <th className="px-1 py-2">摘要</th>
                   <th className="px-1 py-2 text-right">数量</th>
                   <th className="px-1 py-2">単位</th>
                   <th className="px-1 py-2 text-right">{priceHeader}</th>
@@ -491,6 +520,7 @@ export function InvoiceForm({
                         {input("date", "日付", { type: "date", className: "w-36" })}
                       </td>
                       <td className={cell}>{input("desc", "品名", { className: "w-56", maxLength: INVOICE_LIMITS.description })}</td>
+                      <td className={cell}>{input("remark", "摘要", { className: "w-40", maxLength: INVOICE_LIMITS.remark })}</td>
                       <td className={cell}>{input("qty", "数量", { numeric: true, className: "w-20" })}</td>
                       <td className={cell}>{input("unit", "単位", { className: "w-16", maxLength: INVOICE_LIMITS.unit })}</td>
                       <td className={cell}>{input("price", "単価", { numeric: true, className: "w-28" })}</td>

@@ -14,9 +14,11 @@ import {
   invoiceNoPrefix,
   isRounding,
   issueBlockers,
+  postalTransferTextOf,
   quantity100FromDb,
   quantityText,
   type CompanySettings,
+  type ShipTo,
   type InvoiceInput,
   type InvoiceLineInput,
   type InvoiceStatus,
@@ -49,13 +51,14 @@ type CompanyRow = {
   bank_account_type: string | null;
   bank_account_no: string | null;
   bank_account_holder: string | null;
+  postal_transfer_no: string | null;
   rounding: string;
 };
 
 const readCompany = async (sql: SqlLike): Promise<CompanySettings | null> => {
   const [r] = await sql<CompanyRow[]>`
     select company_name, postal_code, address, tel, fax, email, registration_no, bank_name, bank_branch,
-           bank_account_type, bank_account_no, bank_account_holder, rounding
+           bank_account_type, bank_account_no, bank_account_holder, postal_transfer_no, rounding
     from company_settings where id = 1`;
   if (!r) return null;
   return {
@@ -71,6 +74,7 @@ const readCompany = async (sql: SqlLike): Promise<CompanySettings | null> => {
     bankAccountType: r.bank_account_type,
     bankAccountNo: r.bank_account_no,
     bankAccountHolder: r.bank_account_holder,
+    postalTransferNo: r.postal_transfer_no,
     rounding: isRounding(r.rounding) ? r.rounding : DEFAULT_ROUNDING,
   };
 };
@@ -230,8 +234,11 @@ export type Invoice = {
   issuerPostalCode: string | null;
   issuerAddress: string | null;
   issuerTel: string | null;
+  issuerFax: string | null;
   bankText: string | null;
+  postalTransferText: string | null;
   note: string | null;
+  shipTo: ShipTo;
   rounding: Rounding;
   replacesInvoiceId: string | null;
   // 差し替える前の請求書の番号・状態(訂正の下書き)
@@ -285,8 +292,14 @@ type InvoiceRow = {
   issuer_postal_code: string | null;
   issuer_address: string | null;
   issuer_tel: string | null;
+  issuer_fax: string | null;
   bank_text: string | null;
+  postal_transfer_text: string | null;
   note: string | null;
+  ship_to_name: string | null;
+  ship_to_postal_code: string | null;
+  ship_to_address: string | null;
+  ship_to_tel: string | null;
   rounding: string;
   replaces_invoice_id: string | null;
   replaces_invoice_no: string | null;
@@ -313,7 +326,8 @@ const SELECT_INVOICE = (sql: SqlLike, where: SqlFragment, tail: SqlFragment) => 
          to_char(i.period_start, 'YYYY-MM-DD') as period_start, to_char(i.period_end, 'YYYY-MM-DD') as period_end,
          to_char(i.due_on, 'YYYY-MM-DD') as due_on, i.price_basis, i.subtotal_10, i.tax_10, i.subtotal_8, i.tax_8,
          i.subtotal_exempt, i.subtotal, i.tax, i.total, i.issuer_name, i.issuer_registration_no, i.issuer_postal_code,
-         i.issuer_address, i.issuer_tel, i.bank_text, i.note, i.rounding, i.replaces_invoice_id,
+         i.issuer_address, i.issuer_tel, i.issuer_fax, i.bank_text, i.postal_transfer_text, i.note,
+         i.ship_to_name, i.ship_to_postal_code, i.ship_to_address, i.ship_to_tel, i.rounding, i.replaces_invoice_id,
          o.invoice_no as replaces_invoice_no, o.status as replaces_status, o.payment_status as replaces_payment_status,
          n.id as replaced_by_id, n.invoice_no as replaced_by_no,
          i.issued_at, case when ib.id is null then null else ib.last_name || ' ' || ib.first_name end as issued_by_name,
@@ -362,8 +376,16 @@ const toInvoice = (r: InvoiceRow): Invoice => ({
   issuerPostalCode: r.issuer_postal_code,
   issuerAddress: r.issuer_address,
   issuerTel: r.issuer_tel,
+  issuerFax: r.issuer_fax,
   bankText: r.bank_text,
+  postalTransferText: r.postal_transfer_text,
   note: r.note,
+  shipTo: {
+    name: r.ship_to_name,
+    postalCode: r.ship_to_postal_code,
+    address: r.ship_to_address,
+    tel: r.ship_to_tel,
+  },
   rounding: isRounding(r.rounding) ? r.rounding : DEFAULT_ROUNDING,
   replacesInvoiceId: r.replaces_invoice_id,
   replacesInvoiceNo: r.replaces_invoice_no,
@@ -390,6 +412,7 @@ type LineRow = {
   transaction_on: string | null;
   product_id: string | null;
   description: string;
+  remark: string | null;
   quantity: string | null;
   unit: string | null;
   unit_price: number | null;
@@ -402,7 +425,7 @@ const readLines = async (sql: SqlLike, invoiceIds: string[]): Promise<Map<string
   if (invoiceIds.length === 0) return result;
   const rows = await sql<(LineRow & { invoice_id: string })[]>`
     select id, invoice_id, line_no, to_char(transaction_on, 'YYYY-MM-DD') as transaction_on, product_id, description,
-           quantity::text as quantity, unit, unit_price, amount, tax_rate
+           remark, quantity::text as quantity, unit, unit_price, amount, tax_rate
     from invoice_lines where invoice_id = any(${invoiceIds}::uuid[]) order by invoice_id, line_no`;
   for (const r of rows) {
     const list = result.get(r.invoice_id) ?? [];
@@ -412,6 +435,7 @@ const readLines = async (sql: SqlLike, invoiceIds: string[]): Promise<Map<string
       transactionOn: r.transaction_on,
       productId: r.product_id,
       description: r.description,
+      remark: r.remark,
       quantity100: quantity100FromDb(r.quantity),
       unit: r.unit,
       unitPrice: r.unit_price,
@@ -455,10 +479,12 @@ export const toInvoiceInput = (invoice: Invoice, lines: InvoiceLine[]): InvoiceI
   dueOn: invoice.dueOn,
   priceBasis: invoice.priceBasis,
   note: invoice.note,
+  shipTo: invoice.shipTo,
   lines: lines.map((l) => ({
     transactionOn: l.transactionOn,
     productId: l.productId,
     description: l.description,
+    remark: l.remark,
     quantity100: l.quantity100,
     unit: l.unit,
     unitPrice: l.unitPrice,
@@ -525,6 +551,7 @@ const insertLines = async (tx: TransactionSql, invoiceId: string, lines: Invoice
     transaction_on: l.transactionOn,
     product_id: l.productId,
     description: l.description,
+    remark: l.remark,
     quantity: l.quantity100 === null ? null : quantityText(l.quantity100),
     unit: l.unit,
     unit_price: l.unitPrice,
@@ -538,6 +565,7 @@ const insertLines = async (tx: TransactionSql, invoiceId: string, lines: Invoice
     "transaction_on",
     "product_id",
     "description",
+    "remark",
     "quantity",
     "unit",
     "unit_price",
@@ -567,6 +595,10 @@ const headerColumns = (input: InvoiceInput, rounding: Rounding) => {
       tax: t.tax,
       total: t.total,
       note: input.note,
+      ship_to_name: input.shipTo.name,
+      ship_to_postal_code: input.shipTo.postalCode,
+      ship_to_address: input.shipTo.address,
+      ship_to_tel: input.shipTo.tel,
       rounding,
     },
   };
@@ -651,10 +683,11 @@ const issueOnce = (id: string, version: string, today: string, by: string): Prom
       if (!original) return { ok: false, reason: "replace_blocked" };
     }
 
-    // CH-12 その年月の最大の番号＋1
+    // CH-12 その発行日の最大の番号＋1(INV-YYYYMMDD-NNN の NNN。E-05 04 の 0.5 追記)
     const prefix = invoiceNoPrefix(input.issuedOn ?? today);
     const [seqRow] = await tx<{ n: number }[]>`
-      select coalesce(max(substr(invoice_no, 8)::int), 0)::int + 1 as n from invoices where invoice_no like ${`${prefix}-%`}`;
+      select coalesce(max(split_part(invoice_no, '-', 3)::int), 0)::int + 1 as n
+      from invoices where invoice_no like ${`${prefix}-%`}`;
     if (seqRow.n > INVOICE_NO_MAX_SEQ) return { ok: false, reason: "no_limit" };
     const invoiceNo = formatInvoiceNo(input.issuedOn ?? today, seqRow.n);
 
@@ -683,7 +716,9 @@ const issueOnce = (id: string, version: string, today: string, by: string): Prom
         issuer_postal_code: company.postalCode,
         issuer_address: company.address,
         issuer_tel: company.tel,
+        issuer_fax: company.fax,
         bank_text: bankTextOf(company),
+        postal_transfer_text: postalTransferTextOf(company),
         rounding,
         issued_by: by,
         payment_status: "unpaid",

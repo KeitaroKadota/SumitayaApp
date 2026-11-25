@@ -27,6 +27,10 @@ export const toFormValues = (i: Invoice): Record<string, string> => ({
   due_on: val(i.dueOn),
   price_basis: i.priceBasis,
   note: val(i.note),
+  ship_to_name: val(i.shipTo.name),
+  ship_to_postal_code: val(i.shipTo.postalCode),
+  ship_to_address: val(i.shipTo.address),
+  ship_to_tel: val(i.shipTo.tel),
 });
 
 export const toFormLines = (lines: InvoiceLine[]): FormLine[] =>
@@ -34,6 +38,7 @@ export const toFormLines = (lines: InvoiceLine[]): FormLine[] =>
     key: l.id,
     date: val(l.transactionOn),
     desc: l.description,
+    remark: val(l.remark),
     qty: l.quantity100 === null ? "" : quantityText(l.quantity100),
     unit: val(l.unit),
     price: val(l.unitPrice),
@@ -57,4 +62,5 @@ export const companyForCheck = (c: CompanySettings | null): CompanySettings | nu
     bankAccountType: null,
     bankAccountNo: null,
     bankAccountHolder: null,
+    postalTransferNo: null,
   };
