@@ -7,16 +7,18 @@ import { RETURN_REASONS, type ReturnReason } from "@/utils/inquiryRules";
 export { RETURN_REASONS, type ReturnReason };
 export const isReturnReason = (v: string): v is ReturnReason => v in RETURN_REASONS;
 
-// ---- 返品の決まり(【仮】すみたや様に未確認) ----
-// ひな形の本文と、担当者の目安としてパネルに出すだけ。自動では判定しない(00_仮決め一覧 D-06-仮-01〜03、D-06-未-01)
+// ---- 返品の決まり ----
+// ひな形の本文と、担当者の目安としてパネルに出すだけ。自動では判定しない(00_仮決め一覧 D-06-仮-01〜03、D-06-未-01)。
+// 2026-11-26: すみたや様の公開サイト「ご利用ガイド」「よくあるご質問」(https://www.sumitaya.co.jp/f/guide・/f/faq)の記載に合わせた
 export const RETURN_POLICY = {
-  // 【仮】D-06-仮-01
-  deadline: "出荷日から8日以内",
-  // 【仮】D-06-仮-02
-  notReturnable: "名入れ・特注・裾上げなど加工した商品、肌着・足袋などの使用後の品は返品できません",
-  // 【仮】D-06-仮-03
-  shippingStore: "不良・違う商品・配送中の破損は、お店の負担",
-  shippingCustomer: "サイズが合わない・お客様のご都合は、お客様の負担",
+  // D-06-仮-01(サイトの記載)
+  deadline: "商品到着後7日以内にお電話またはメールでご連絡",
+  // D-06-仮-02(サイトの記載の要約)
+  notReturnable:
+    "使用した品・加工やリフォームをした品・特注オーダーメイド品・アウトレット品・「返品不可」の品・開封後の笛など口を付けて使う品・パッケージやラベルをなくした品は返品できません",
+  // D-06-仮-03(サイトの記載)
+  shippingStore: "ご注文と違う商品・損傷や汚れのある商品は、無料で交換（お店の負担）",
+  shippingCustomer: "サイズが合わない・写真と違うなどお客様のご都合の返品は、返送の送料も最初の送料もお客様の負担",
   // 返送先の住所は未確認(D-06-未-01)。分かったらここに書く
   returnAddress: null as string | null,
 } as const;
