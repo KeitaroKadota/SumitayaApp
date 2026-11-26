@@ -13,7 +13,14 @@ export const ABC_SETTINGS = {
   periodMonths: 12,
   // 登録からこの日数たっていない商品は「新商品」
   newProductDays: 90,
+  // 移行日。この日までに登録した商品(実データの一括の取り込みで入れた商品)は新商品にしない(01 の 4.1 の 6)。
+  // 開発DBは 2026-11-26 に取り込んだ。本番に移すときは本番の取り込みの日に直す(00_仮決め一覧 A-02-仮-03)
+  migrationDate: "2026-11-26",
 } as const;
+
+// 新商品か: 登録が移行日より後で、かつ「今日 − 新商品の日数」より後
+export const isNewProductOn = (createdOn: string, newSince: string, settings = ABC_SETTINGS): boolean =>
+  createdOn > settings.migrationDate && createdOn > newSince;
 
 export type AbcInput = {
   productId: string | null;

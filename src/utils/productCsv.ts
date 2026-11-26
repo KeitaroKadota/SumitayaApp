@@ -371,21 +371,25 @@ const planCrossmallItem = async (header: string[], rows: CsvRow[]): Promise<Prod
 
   // 親の商品コード(item_code)か、属性の無い商品の商品コード(product_code)が同じ商品
   const codes = [...new Set(rows.map((r) => normalizeProductCode(cell(r, "item_code"))).filter(Boolean))];
+  const codeSet = new Set(codes);
+  // 「= any(配列) or = any(配列)」だと、商品が1万件を超えたときに1行ずつ配列を探して30秒を超えたため、
+  // 商品コードの表(c)を作り、in (select ...) で照らし合わせる(PostgreSQL が表を作って一度に照らす)
   const existingRows =
     codes.length === 0
       ? []
       : await query(
           (sql) => sql<ExistingProduct[]>`
+            with c (code) as (select distinct unnest(${codes}::text[]))
             select ${sql.unsafe(EXISTING_COLUMNS_SQL)}
             from products p left join suppliers s on s.id = p.main_supplier_id
-            where p.item_code = any(${codes}::text[]) or p.product_code = any(${codes}::text[])
+            where p.item_code in (select code from c) or p.product_code in (select code from c)
             order by p.product_code`,
           { timeoutMs: 30_000 }
         );
   const byItem = new Map<string, ExistingProduct[]>();
   for (const p of existingRows) {
     for (const key of new Set([p.item_code, p.product_code])) {
-      if (!key || !codes.includes(key)) continue;
+      if (!key || !codeSet.has(key)) continue;
       byItem.set(key, [...(byItem.get(key) ?? []), p]);
     }
   }

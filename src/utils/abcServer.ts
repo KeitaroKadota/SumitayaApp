@@ -2,7 +2,7 @@
 // 計算すると同じトランザクションで商品マスタ(products.abc_rank・abc_ranked_at)へ反映する。
 // 権限チェックはしない(呼ぶ側の画面・操作で requireAccess("sales", …) 済みの前提)。
 import { query, transaction, type Sql } from "@/utils/db";
-import { ABC_SETTINGS, calcAbc, type AbcInput, type AbcRank, type AbcSummary } from "@/utils/abc";
+import { ABC_SETTINGS, calcAbc, isNewProductOn, type AbcInput, type AbcRank, type AbcSummary } from "@/utils/abc";
 import { SALES_CHANNELS, type SalesChannel } from "@/utils/csvImport/kinds/salesColumns";
 import { addDays, addMonths, monthsBetween, yearMonthLabel } from "@/utils/salesPeriod";
 import { escapeLike, isValidDateStr } from "@/utils/textNormalize";
@@ -150,7 +150,7 @@ export const runAbc = async (from: string, to: string, today: string, by: string
       group by 1, 2`,
     { timeoutMs: 60_000 }
   );
-  // 手順5・6 商品マスタ(在籍中と、売上のある商品)。新商品は登録から定数の日数以内
+  // 手順5・6 商品マスタ(在籍中と、売上のある商品)。新商品は登録から定数の日数以内(移行日までに登録した商品は除く)
   const productIds = sales.map((s) => s.product_id).filter((id): id is string => !!id);
   const products = await query(
     (sql) => sql<{ id: string; product_code: string; abc_rank: AbcRank | null; created_on: string }[]>`
@@ -169,7 +169,7 @@ export const runAbc = async (from: string, to: string, today: string, by: string
       quantity: Number(s.quantity),
       frequency: Number(s.frequency),
       currentRank: p?.abc_rank ?? null,
-      isNewProduct: p ? p.created_on > newSince : false,
+      isNewProduct: p ? isNewProductOn(p.created_on, newSince) : false,
     };
   });
   const sold = new Set(productIds);
@@ -182,7 +182,7 @@ export const runAbc = async (from: string, to: string, today: string, by: string
         quantity: 0,
         frequency: 0,
         currentRank: p.abc_rank,
-        isNewProduct: p.created_on > newSince,
+        isNewProduct: isNewProductOn(p.created_on, newSince),
       });
 
   // 手順7
